@@ -221,20 +221,21 @@ void world_new(void) BANKED {
     G.px = 10; G.py = 12; G.facing = D_DOWN;
     G.scene = SCENE_FARM;
     G.tool = T_HAND;
-    G.seeds[1] = 6; G.seed_sel = 1;
+    G.seeds[1][R_COMMON] = 6; G.seed_sel = 1;
     G.water = 30;
     G.tomorrow = 0;
     G.opt_music = G.opt_sfx = 1;
     G.opt_text = 1;
     G.opt_clock = 1;
     strcpy(G.farm_name, "Stilwell");
-    strcpy(G.pet_name, "Biscuit");
+    strcpy(G.pet_name, "Buddy");   // pet_name[6]: 5 letters max
     G.rng_lo = DIV_REG | 1; G.rng_hi = sys_time;
 }
 
 // ---------------------------------------------------------------- overnight
 static uint8_t m_crows, m_season, m_passed, m_storm, m_fairy, m_giant, m_produce;
 static uint32_t m_income;
+static uint8_t m_fruit;   // rarity: a fruit tree ripened overnight
 
 static uint8_t near_decor(uint16_t i, uint8_t kind, uint8_t r) {
     int8_t x = i & 31, y = i >> 5, dx, dy;
@@ -249,20 +250,124 @@ static uint8_t near_decor(uint16_t i, uint8_t kind, uint8_t r) {
     return 0;
 }
 
-static void water_around(uint16_t i, uint8_t r) {
-    int8_t x = i & 31, y = i >> 5, dx, dy;
-    for (dy = -r; dy <= (int8_t)r; dy++)
-        for (dx = -r; dx <= (int8_t)r; dx++) {
-            int8_t cx = x + dx, cy = y + dy;
-            uint16_t j;
-            if (cx < 0 || cy < 0 || cx >= WW || cy >= WH) continue;
-            j = WIDX(cx, cy);
-            if (G.cell[j] == C_SOIL) G.a1[j] |= SOIL_WET;
-        }
+#define MAX_SCARE 24
+static uint8_t scared(uint8_t x, uint8_t y, const uint8_t *sx, const uint8_t *sy, uint8_t ns) {
+    uint8_t k;
+    for (k = 0; k < ns; k++) {
+        uint8_t dx = x - sx[k] + 4, dy = y - sy[k] + 4;   // within 4 both ways <=> 0..8 after the offset
+        if (dx <= 8 && dy <= 8) return 1;
+    }
+    return 0;
 }
 
-static uint8_t ripe_pumpkin(uint16_t i) {
-    return G.cell[i] == C_SOIL && (G.a1[i] & SOIL_CROP) == 10 && G.a2[i] >= crops[10].days;
+// G.cell, G.a1 and G.a2 are consecutive 1024-byte arrays: pc[A1] / pc[A2] are a cell's a1 / a2
+#define A1 1024
+#define A2 2048
+
+static void water_around(uint16_t i, uint8_t r) {   // clamped box, unsigned (was ~250 cycles a cell)
+    uint8_t x = (uint8_t)i & 31, y = (uint8_t)(i >> 5), cx, cy, w;
+    uint8_t x0 = x >= r ? x - r : 0, x1 = x + r > WW - 1 ? WW - 1 : x + r;
+    uint8_t y0 = y >= r ? y - r : 0, y1 = y + r > WH - 1 ? WH - 1 : y + r;
+    w = x1 - x0 + 1;
+    for (cy = y0; cy <= y1; cy++) {
+        uint8_t *pc = &G.cell[WIDX(x0, cy)];
+        for (cx = w; cx; cx--, pc++)
+            if (*pc == C_SOIL) pc[A1] |= SOIL_WET;
+    }
+}
+
+// rarity: two happy adults of a kind sharing a building may have a baby (named in the morning).
+// The baby takes the better parent's breed, sometimes the other's, and now and then one tier better.
+static uint8_t m_baby, m_mom, m_dad;   // m_baby = animal slot + 1 (0 none)
+static void breed_overnight(void) {
+    uint8_t b, k, mom, dad, n, free_k, t, br;
+    m_baby = 0;
+    for (b = 0; b < MAX_BLD && !m_baby; b++) {
+        t = G.bld[b].type;
+        if ((t != B_BARN && t != B_COOP) || (G.bld[b].flags & BF_RUIN)) continue;
+        for (t = A_COW; t <= A_SHEEP; t++) {
+            mom = dad = 0xFF; n = 0; free_k = 0xFF;
+            for (k = 0; k < MAX_ANIMALS; k++) {
+                Animal *a = &G.anim[k];
+                if (a->kind == 0xFF) { if (free_k == 0xFF) free_k = k; continue; }
+                if (a->home != b) continue;
+                n++;
+                if (a->kind != t || a->age < ADULT_AGE || a->happy < 180) continue;
+                if (mom == 0xFF) mom = k; else if (dad == 0xFF) dad = k;
+            }
+            if (dad == 0xFF || free_k == 0xFF || n >= (G.bld[b].type == B_COOP ? 6 : BARN_CAP) || rnd() >= 40) continue;
+            {
+                uint8_t bm = BREED(&G.anim[mom]), bd = BREED(&G.anim[dad]), r = rnd();
+                br = bm > bd ? bm : bd;
+                if (r < 16) { if (br < R_LEGEND) br++; }
+                else if (r >= 170) br = bm < bd ? bm : bd;
+            }
+            {
+                Animal *c = &G.anim[free_k];
+                c->kind = t; c->home = b; c->happy = 150; c->age = 0; c->flags = br << 6;
+                strcpy(c->name, "Baby");
+            }
+            m_baby = free_k + 1; m_mom = mom; m_dad = dad;
+            break;
+        }
+    }
+}
+
+// overnight pass 1, one cell. Out of line so the 1024-cell loop stays a few instructions: SDCC hoisted
+// every branch's address math to the top of the inline version (~5 frames for the pass on a big farm).
+static const uint8_t grows[32] = {   // cell types pass 1 touches: grass, grass2, soil, decor, tree, bush, sand, machine, wild sapling
+    1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0};
+static uint8_t g_crops, g_rod;
+static void grow(uint8_t *pc, uint16_t i) {
+    uint8_t c = *pc, a1 = pc[A1], a2 = pc[A2], crop;
+    switch (c) {
+    case C_SOIL:
+        crop = a1 & SOIL_CROP;
+        if (crop && crop != CROP_WITHERED) {
+            if (g_crops < 255) g_crops++;
+            if (((a1 & SOIL_WET) || m_fairy) && (a2 & SOIL_DAYS) < crops[crop].days) pc[A2] = a2 + 1;
+        }
+        pc[A1] = a1 & ~SOIL_WET;
+        break;
+    case C_TREE:
+        if (a2 < 250) pc[A2] = ++a2;
+        if (a2 >= 10 && (a1 & 31) < TREE_RIPE_DAYS && season_ok_tree(a1 >> 5)) {
+            pc[A1] = ++a1;
+            if ((a1 & 31) == TREE_RIPE_DAYS) m_fruit = 1;
+        }
+        break;
+    case C_BUSH:
+        if (a1 < 9) pc[A1] = a1 + 1;
+        break;
+    case C_SAPLING_WILD:
+        if (++a2 >= 8) { *pc = PLOT_OF(i & 31, i >> 5) == 4 ? C_BIRCH : C_PINE; a2 = 0; }
+        pc[A2] = a2;
+        break;
+    case C_DECOR:
+        if (a1 == DK_BEEHIVE && a2 < 3) pc[A2] = a2 + 1;
+        if (a1 == DK_ROD) g_rod = 1;
+        break;
+    case C_MACHINE:
+        if (a2 && a2 < 0x80) {
+            if ((a1 >> 2) <= 1) { pc[A1] = a1 & 3; pc[A2] = a2 | 0x80; }
+            else pc[A1] = a1 - 4;
+        }
+        break;
+    default: {   // grass, sand
+        uint8_t x = (uint8_t)i & 31, y = (uint8_t)(i >> 5);
+        if (owned(x, y)) {
+            if (c != C_SAND && rnd() < 2) { *pc = C_WEEDS; pc[A1] = 1; }   // a1 = 1: regrown weed (the groundskeeper's job)
+        } else if (c != C_GRASS2) {
+            uint8_t p = PLOT_OF(x, y);
+            if ((p == 0 || p == 4 || p == 7 || p == 12) && rnd() < 3) { *pc = C_FORAGE; pc[A1] = rnd() % 3; }
+            if ((p == 2 || p == 15) && rnd() < 3) { *pc = C_ORE; pc[A1] = rnd() < 200 ? 0 : 1; }
+        }
+    }
+    }
+}
+
+static uint8_t ripe_pumpkin(const uint8_t *pc) {
+    return *pc == C_SOIL && (pc[A1] & SOIL_CROP) == 10 && (pc[A2] & SOIL_DAYS) >= crops[10].days;
 }
 
 void world_overnight(uint8_t passed_out) BANKED {
@@ -271,46 +376,23 @@ void world_overnight(uint8_t passed_out) BANKED {
     uint8_t has_rod = 0, green = 0;
     m_crows = m_season = m_storm = m_fairy = m_giant = m_produce = 0;
     m_passed = passed_out;
+    m_fruit = 0;
     for (k = 0; k < MAX_BLD; k++)
         if (G.bld[k].type == B_GREENHOUSE && !(G.bld[k].flags & BF_RUIN)) green = 1;
     m_fairy = rnd() < 6;
-    // 1. growth and nature
-    for (i = 0; i < 1024; i++) {
-        c = G.cell[i];
-        if (c == C_SOIL) {
-            crop = G.a1[i] & SOIL_CROP;
-            if (crop && crop != CROP_WITHERED) {
-                n++;
-                if (((G.a1[i] & SOIL_WET) || m_fairy) && G.a2[i] < crops[crop].days) G.a2[i]++;
-            }
-            G.a1[i] &= ~SOIL_WET;
-        } else if (c == C_TREE) {
-            if (G.a2[i] < 250) G.a2[i]++;
-            if (G.a2[i] >= 10 && (G.a1[i] & 31) < 31 && season_ok_tree(G.a1[i] >> 5)) G.a1[i]++;
-        } else if (c == C_BUSH) {
-            if (G.a1[i] < 9) G.a1[i]++;
-        } else if (c == C_SAPLING_WILD) {
-            if (++G.a2[i] >= 8) { G.cell[i] = PLOT_OF(i & 31, i >> 5) == 4 ? C_BIRCH : C_PINE; G.a2[i] = 0; }
-        } else if (c == C_DECOR) {
-            if (G.a1[i] == DK_BEEHIVE && G.a2[i] < 3) G.a2[i]++;
-            if (G.a1[i] == DK_ROD) has_rod = 1;
-        } else if (c == C_MACHINE) {
-            if (G.a2[i] && G.a2[i] < 0x80) {
-                if ((G.a1[i] >> 2) <= 1) { G.a1[i] &= 3; G.a2[i] |= 0x80; }
-                else G.a1[i] -= 4;
-            }
-        } else if ((c == C_GRASS || c == C_GRASS2) && owned(i & 31, i >> 5)) {
-            if (rnd() < 2) G.cell[i] = C_WEEDS;
-        } else if ((c == C_GRASS || c == C_SAND) && !owned(i & 31, i >> 5)) {
-            uint8_t p = PLOT_OF(i & 31, i >> 5);
-            if ((p == 0 || p == 4 || p == 7 || p == 12) && rnd() < 3) { G.cell[i] = C_FORAGE; G.a1[i] = rnd() % 3; }
-            if ((p == 2 || p == 15) && rnd() < 3) { G.cell[i] = C_ORE; G.a1[i] = rnd() < 200 ? 0 : 1; }
-        }
+    // 1. growth and nature: a tight scan, with the per-cell work out of line (see grow)
+    {
+        uint8_t *pc = G.cell;
+        g_crops = 0; g_rod = 0;
+        for (i = 0; i < 1024; i++, pc++)
+            if (grows[*pc & 31]) grow(pc, i);
+        n = g_crops; has_rod = g_rod;
     }
     // 2. giant pumpkins: a ripe 2x2 block may fuse
     for (i = 0; i < 1024 - 33; i++) {
-        if ((i & 31) == 31) continue;
-        if (ripe_pumpkin(i) && ripe_pumpkin(i + 1) && ripe_pumpkin(i + 32) && ripe_pumpkin(i + 33) && rnd() < 64) {
+        uint8_t *pc = &G.cell[i];
+        if (*pc != C_SOIL || (pc[A1] & SOIL_CROP) != 10 || (i & 31) == 31) continue;
+        if (ripe_pumpkin(pc) && ripe_pumpkin(pc + 1) && ripe_pumpkin(pc + 32) && ripe_pumpkin(pc + 33) && rnd() < 64) {
             G.cell[i] = G.cell[i + 1] = G.cell[i + 32] = G.cell[i + 33] = C_GIANT;
             G.a1[i] = 0; G.a1[i + 1] = 1; G.a1[i + 32] = 2; G.a1[i + 33] = 3;
             m_giant = 1;
@@ -319,10 +401,18 @@ void world_overnight(uint8_t passed_out) BANKED {
     // 3. crows visit bigger farms without scarecrows
     if (n >= 6 && rnd() < 90) {
         uint16_t start = ((uint16_t)rnd() << 2), j;
+        // list the scarecrows once (a 9x9 scan per crop was up to 80k cell reads on a guarded farm)
+        uint8_t sx[MAX_SCARE], sy[MAX_SCARE], ns = 0;
+        for (j = 0; j < 1024; j++)
+            if (G.cell[j] == C_DECOR && G.a1[j] == DK_SCARECROW) {
+                if (ns == MAX_SCARE) { ns = 0xFF; break; }
+                sx[ns] = (uint8_t)j & 31; sy[ns] = (uint8_t)(j >> 5); ns++;
+            }
         for (j = 0; j < 1024; j++) {
             i = (start + j) & 1023;
             crop = G.a1[i] & SOIL_CROP;
-            if (G.cell[i] == C_SOIL && crop && crop != CROP_WITHERED && !near_decor(i, DK_SCARECROW, 4)) {
+            if (G.cell[i] == C_SOIL && crop && crop != CROP_WITHERED &&
+                !(ns == 0xFF ? near_decor(i, DK_SCARECROW, 4) : scared((uint8_t)i & 31, (uint8_t)(i >> 5), sx, sy, ns))) {
                 G.a1[i] &= SOIL_WET | SOIL_FERT; G.a2[i] = 0;
                 m_crows = 1;
                 break;
@@ -361,28 +451,41 @@ void world_overnight(uint8_t passed_out) BANKED {
         uint8_t r = rnd();
         G.tomorrow = r < 50 ? 1 : (G.season == SEASON_SUMMER && r < 70 ? 3 : 0);
     }
-    for (i = 0; i < 1024; i++) {
-        c = G.cell[i];
-        if (c == C_SOIL && (G.weather == 1 || G.weather == 3)) G.a1[i] |= SOIL_WET;
-        if (c == C_DECOR) {
-            if (G.a1[i] == DK_SPRINKLER) water_around(i, 1);
-            else if (G.a1[i] == DK_QSPRINKLER) water_around(i, 2);
+    {
+        uint8_t rain = G.weather == 1 || G.weather == 3, *pc = G.cell, *p1 = G.a1;
+        for (i = 0; i < 1024; i++, pc++, p1++) {
+            c = *pc;
+            if (c == C_SOIL && rain) *p1 |= SOIL_WET;
+            else if (c == C_DECOR) {
+                if (*p1 == DK_SPRINKLER) water_around(i, 1);
+                else if (*p1 == DK_QSPRINKLER) water_around(i, 2);
+            }
         }
     }
     // 7. animals: fed ones give produce (quality from happiness); happiness drifts
     for (k = 0; k < MAX_ANIMALS; k++) {
         Animal *a = &G.anim[k];
         if (a->kind == 0xFF) continue;
-        if (a->flags & AF_FED) { if (a->happy < 235) a->happy += 20; a->flags |= AF_READY; m_produce = 1; }
+        if (a->flags & AF_FED) {
+            if (a->happy < 235) a->happy += 20;
+            if (a->age < ADULT_AGE) ;   // babies just grow
+            else if (a->kind != A_SHEEP) { a->flags |= AF_READY; m_produce = 1; }
+            else if ((a->flags & AF_WOOL) >= ((WOOL_DAYS - 1) << 3)) { a->flags = (a->flags & ~AF_WOOL) | AF_READY; m_produce = 1; }
+            else if (!(a->flags & AF_READY)) a->flags += 1 << 3;   // fleece grows while fed
+        }
         else if (a->happy > 30) a->happy -= 30;
         else a->happy = 0;
         if (a->flags & AF_PET) { if (a->happy < 245) a->happy += 10; }
-        a->flags &= AF_READY;
+        a->flags &= AF_READY | AF_BREED | AF_WOOL;
         if (a->age < 255) a->age++;
     }
+    breed_overnight();
     G.pet_flags = 0;
     G.talked = G.gifted = 0;
+    // farmhands: wages come out of gold first, then they water/harvest/ship/tend/weed
+    staff_overnight();
     // 8. money, rest, reset
+    biz_overnight();
     m_income = G.ship_value;
     G.gold += G.ship_value;
     G.earned += G.ship_value;
@@ -396,7 +499,7 @@ void world_overnight(uint8_t passed_out) BANKED {
     }
     G.facing = D_DOWN;
     G.scene = SCENE_FARM;
-    building = 0;
+    build_cancel();
     goals_check();
     save_write();
 }
@@ -417,14 +520,31 @@ void morning_report(void) BANKED {
         s_clr(); s_add("It's "); s_add(season_name[G.season]); s_add(" now!");
         say(sbuf);
     }
+    staff_report();
     if (m_income) {
         s_clr(); s_add("Shipping paid G"); s_num(m_income, 0); s_add(" overnight!");
         say(sbuf);
     }
+    biz_report();
     if (m_fairy) say("A crop fairy visited in the night... everything grew a little!");
     if (m_giant) say("Whoa! Your pumpkins grew into a GIANT pumpkin!");
     if (m_crows) say("Crows pecked at a crop overnight! A scarecrow would help.");
     if (m_storm) say("Lightning struck a crop in the storm! A lightning rod protects the whole farm.");
     if (m_produce) say("Your animals have produce waiting for you.");
+    if (m_baby && G.anim[m_baby - 1].kind != 0xFF) {
+        Animal *c = &G.anim[m_baby - 1];
+        static const char *const kind_w[3] = {"calf", "chick", "lamb"};
+        static const char *const breed_w[NUM_RARITY] = {"", "rare ", "GOLDEN "};
+        s_clr(); s_add(G.anim[m_mom].name); s_add(" and "); s_add(G.anim[m_dad].name); s_add(" had a ");
+        s_add(breed_w[BREED(c)]); s_add(kind_w[c->kind % 3]); s_add("! It will be grown in a week.");
+        music_play(MUS_JINGLE_FANFARE);
+        say(sbuf);
+        music_for_scene();
+        s_clr(); s_add("Name the "); s_add(kind_w[c->kind % 3]);   // prompt lives in sbuf: ui_name is in another bank
+        ui_name(sbuf, c->name, 5);
+        m_baby = 0;
+        save_write();
+    }
+    if (m_fruit && G.season != SEASON_WINTER) say("Fresh fruit is ripe on your fruit trees!");
     if (G.mail) say("There's a letter in your mailbox!");
 }

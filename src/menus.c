@@ -73,7 +73,7 @@ static const char *item_name(const BItem *b) {
 }
 
 // carried object while moving
-static uint8_t carry_kind = 0xFF, carry_a, carry_b, carry_slot;   // carry_kind = cell type, or C_STRUCT
+static uint8_t carry_kind = 0xFF, carry_a, carry_b, carry_slot, carry_x, carry_y;   // carry_kind = cell type, or C_STRUCT
 
 static const BItem *cur_item(void) { return &cats[G.build_cat][G.build_sel]; }
 
@@ -132,7 +132,7 @@ static void remove_at(uint8_t x, uint8_t y) {
     if (c == C_STRUCT) {
         uint8_t slot = G.a1[i];
         Building *b = &G.bld[slot];
-        if (b->type == B_HOUSE) { hud_flash("You can't remove your house."); return; }
+        if (b->type == B_HOUSE) { hud_flash("Can't remove house"); return; }
         s_clr(); s_add("Demolish the "); s_add(bldg_names[b->type]); s_add("? It's gone for good.");
         if (!ui_yesno(sbuf)) return;
         {
@@ -152,7 +152,27 @@ static void remove_at(uint8_t x, uint8_t y) {
         hud_flash("Removed.");
         return;
     }
-    hud_flash("Nothing to remove there.");
+    hud_flash("Nothing to remove.");
+}
+
+// leave build mode; anything still in hand goes back where it was picked up
+void build_cancel(void) BANKED {
+    if (carry_kind == C_STRUCT) {
+        Building *bb = &G.bld[carry_slot];
+        uint8_t xx, yy, p = 0, w = bld_w(bb->type), h = bld_h(bb->type);
+        for (yy = 0; yy < h; yy++)
+            for (xx = 0; xx < w; xx++) {
+                uint16_t j = WIDX(bb->x + xx, bb->y + yy);
+                G.cell[j] = C_STRUCT; G.a1[j] = carry_slot; G.a2[j] = p++;
+            }
+        redraw_rect(bb->x, bb->y, w, h);
+    } else if (carry_kind != 0xFF) {
+        uint16_t i = WIDX(carry_x, carry_y);
+        G.cell[i] = carry_kind; G.a1[i] = carry_a; G.a2[i] = carry_b;
+        if (carry_kind == C_DECOR) fix_autotile(carry_x, carry_y); else redraw_cell(carry_x, carry_y);
+    }
+    carry_kind = 0xFF;
+    building = 0;
 }
 
 void build_place(void) BANKED {
@@ -183,19 +203,19 @@ void build_place(void) BANKED {
                     redraw_rect(bx, by, bw, bh);
                 }
                 sfx(SFX_CONFIRM);
-                hud_flash("Picked up! A to set it down.");
+                hud_flash("Picked up! A=place");
             } else if (c == C_DECOR || c == C_MACHINE || c == C_TREE) {
                 uint8_t was_fence = c == C_DECOR && decor[G.a1[i]].fence;
                 if (c == C_DECOR && G.a1[i] == DK_BRIDGE) return;
-                carry_kind = c; carry_a = G.a1[i]; carry_b = G.a2[i];
+                carry_kind = c; carry_a = G.a1[i]; carry_b = G.a2[i]; carry_x = x0; carry_y = y0;
                 G.cell[i] = C_GRASS; G.a1[i] = 0; G.a2[i] = 0;
                 if (was_fence) fix_autotile(x0, y0); else redraw_cell(x0, y0);
                 sfx(SFX_CONFIRM);
-                hud_flash("Picked up! A to set it down.");
+                hud_flash("Picked up! A=place");
             }
             return;
         }
-        if (!ok) { sfx(SFX_BUMP); hud_flash("Can't put it there."); return; }
+        if (!ok) { sfx(SFX_BUMP); hud_flash("Can't put it here."); return; }
         if (carry_kind == C_STRUCT) {
             Building *bb = &G.bld[carry_slot];
             uint8_t xx, yy, p = 0;
@@ -217,7 +237,7 @@ void build_place(void) BANKED {
     }
     if (!ok) { sfx(SFX_BUMP); hud_flash("Can't build there."); return; }
     item_cost(b, &g, &wd, &st);
-    if (G.gold < g || G.wood < wd || G.stone < st) { sfx(SFX_BUMP); hud_flash("Not enough materials."); return; }
+    if (G.gold < g || G.wood < wd || G.stone < st) { sfx(SFX_BUMP); hud_flash("Need materials."); return; }
     if (b->kind == BK_BLDG) {
         s_clr(); s_add("Build a "); s_add(bldg_names[b->arg]); s_add(" here?\n"); cost_str(g, wd, st);
         if (!ui_yesno(sbuf)) return;
@@ -242,55 +262,59 @@ void build_place(void) BANKED {
     goals_check();
 }
 
+// The lists hold names only (a name plus its full cost never fit 17 columns); the hovered entry's cost
+// shows in a panel on top, and the list sits under it at rows 4..16: up to 11 entries, else 10 + "More...".
+#define BPAGE 10
+static void build_panel(const BItem *b) {
+    uint16_t g; uint8_t w, s;
+    ui_panel(0, 0, 20, 4);
+    if (!b) { ui_text(2, 1, "More choices"); return; }
+    item_cost(b, &g, &w, &s);
+    s_clr();
+    if (g || w || s) cost_str(g, w, s); else s_add("Free");
+    if ((g || w || s) && s_len() <= 12) { s_clr(); s_add("Cost "); cost_str(g, w, s); }
+    ui_text(2, 1, sbuf);
+    s_clr(); s_add("Have "); s_num(G.wood, 0); s_add("W "); s_num(G.stone, 0); s_ch('S');
+    ui_text(2, 2, sbuf);
+}
+
+static uint8_t build_list(uint8_t c, uint8_t first, uint8_t cnt, uint8_t more, uint8_t sel) {
+    uint8_t k, r, hv = sel < cnt + more ? sel : 0;
+    for (k = 0; k < cnt; k++) { s_clr(); s_add(item_name(&cats[c][first + k])); lbl_set(k); }
+    if (more) { s_clr(); s_add("More..."); lbl_set(cnt); }
+    ui_hover = &hv;
+    while (1) {
+        build_panel(hv < cnt ? &cats[c][first + hv] : 0);
+        r = ui_menu(0, 4, 20, lp, cnt + more, hv);
+        if (r != 0xFE) break;
+    }
+    ui_hover = 0;
+    return r;
+}
+
 static uint8_t build_menu(void) {
-    uint8_t c, k, r, n;
-    c = ui_menu(0, 0, 11, cat_names, 6, G.build_cat);
+    uint8_t c, r, n, sel;
+    c = ui_menu(0, 0, 12, cat_names, 6, G.build_cat);
     if (c == 0xFF) return 0;
     n = cat_n[c];
-    while (1) {
-        uint8_t first = 0, show;
-        ui_end(); ui_begin();
-        // page through long lists 12 at a time
-        show = n;
-        if (n > 12) show = 12;
-        for (k = 0; k < show; k++) {
-            const BItem *b = &cats[c][k + first];
-            uint16_t g; uint8_t w, s;
-            uint8_t len;
-            item_cost(b, &g, &w, &s);
-            s_clr(); cost_str(g, w, s);
-            len = s_len();
-            strcpy(lbl[13], sbuf);
-            s_clr(); s_add(item_name(b)); s_pad(17 - len); s_add(lbl[13]);
-            lbl_set(k);
+    sel = G.build_cat == c ? G.build_sel : 0;
+    ui_end(); ui_begin();
+    if (n > BPAGE + 1) {
+        r = build_list(c, 0, BPAGE, 1, sel > BPAGE ? BPAGE : sel);
+        if (r == BPAGE) {
+            ui_end(); ui_begin();
+            r = build_list(c, BPAGE, n - BPAGE, 0, sel >= BPAGE ? sel - BPAGE : 0);
+            if (r != 0xFF) r += BPAGE;
         }
-        if (n > 12) {
-            // second page via the last entry
-            s_clr(); s_add("More..."); lbl_set(12);
-            r = ui_menu(0, 0, 20, lp, 13, G.build_cat == c ? G.build_sel : 0);
-            if (r == 12) {
-                ui_end(); ui_begin();
-                for (k = 12; k < n; k++) {
-                    const BItem *b = &cats[c][k];
-                    uint16_t g; uint8_t w, s, len;
-                    item_cost(b, &g, &w, &s);
-                    s_clr(); cost_str(g, w, s); len = s_len(); strcpy(lbl[13], sbuf);
-                    s_clr(); s_add(item_name(b)); s_pad(17 - len); s_add(lbl[13]);
-                    lbl_set(k - 12);
-                }
-                r = ui_menu(0, 0, 20, lp, n - 12, 0);
-                if (r != 0xFF) r += 12;
-            }
-        } else r = ui_menu(0, 0, 20, lp, n, G.build_cat == c ? G.build_sel : 0);
-        if (r == 0xFF) return 0;
-        G.build_cat = c; G.build_sel = r;
-        carry_kind = 0xFF;
-        building = 1;
-        ui_dialog(c == 5 ? (r == 0 ? "Face something you built and press A to pick it up, then A again to set it down."
-                                   : "Face something you built and press A to remove it.")
-                         : "A places it in front of you. B or SELECT when you're done.");
-        return 1;
-    }
+    } else r = build_list(c, 0, n, 0, sel);
+    if (r == 0xFF) return 0;
+    build_cancel();
+    G.build_cat = c; G.build_sel = r;
+    building = 1;
+    ui_dialog(c == 5 ? (r == 0 ? "Face something you built and press A to pick it up, then A again to set it down."
+                               : "Face something you built and press A to remove it.")
+                     : "A places it in front of you. B or SELECT when you're done.");
+    return 1;
 }
 
 // ================================================================ start menu pages
@@ -313,35 +337,38 @@ static uint8_t tools_page(void) {
         s_clr(); s_add(tool_names[k]);
         t = k == T_HOE ? G.tier[TT_HOE] : k == T_CAN ? G.tier[TT_CAN] : k == T_AXE ? G.tier[TT_AXE] : k == T_HAMMER ? G.tier[TT_HAMMER] : k == T_ROD ? G.tier[TT_ROD] : 0;
         if (t) { s_ch(' '); s_ch(t == 1 ? 'C' : t == 2 ? 'I' : 'G'); }
-        if (k == T_CAN) { s_pad(15); s_num(G.water, 2); }
-        if (k == T_FERT) { s_pad(15); s_num(G.fert, 2); }
+        if (k == T_CAN) { s_pad(14); s_num(G.water, 3); }   // 3 wide: 17 columns with 3-digit fertilizer
+        if (k == T_FERT) { s_pad(14); s_num(G.fert, 3); }
         lbl_set(k);
     }
     r = ui_menu(0, 0, 20, lp, NUM_TOOLS, G.tool);
     if (r == 0xFF) return 0;
     if (r == T_SEEDS && !G.seed_sel) G.seed_sel = 1;
     G.tool = r;
-    building = 0;
+    build_cancel();
     ui_dialog(tool_help[r]);
     (void)tier_names;
     return 1;
 }
 
 static uint8_t seeds_page(void) {
-    uint8_t k, n = 0, map[NUM_CROPS], r;
-    for (k = 1; k <= NUM_CROPS; k++) {
-        if (!G.seeds[k]) continue;
-        s_clr(); s_ch((char)(0x80 + k - 1)); s_ch(' '); s_add(items[k - 1].name); s_pad(13); s_ch('x'); s_num(G.seeds[k], 2);
-        lbl_set(n);
-        map[n++] = k;
-        if (n == 10) break;
-    }
+    uint8_t k, n = 0, map[10], rmap[10], r, rr;
+    for (k = 1; k <= NUM_CROPS && n < 10; k++)
+        for (rr = 0; rr < NUM_RARITY && n < 10; rr++) {
+            if (!G.seeds[k][rr]) continue;
+            s_clr(); s_ch((char)(0x80 + k - 1)); s_ch(' '); s_add(items[k - 1].name);
+            if (rr) s_ch(rr == R_RARE ? '+' : (char)0xF1);   // rare +, legendary gold star
+            s_pad(13); s_ch('x'); s_num(G.seeds[k][rr], 2);
+            lbl_set(n);
+            rmap[n] = rr;
+            map[n++] = k;
+        }
     if (!n) { ui_dialog("You have no seeds. The General Store in town sells them by season."); return 0; }
     {
         uint8_t hv = 0;
         ui_hover = &hv;
         while (1) {
-            crop_panel(map[hv]);
+            crop_panel_r(map[hv], rmap[hv]);
             r = ui_menu(0, 0, 20, lp, n, hv);
             if (r != 0xFE) break;
         }
@@ -350,14 +377,27 @@ static uint8_t seeds_page(void) {
     if (r == 0xFF) return 0;
     k = map[r];
     G.seed_sel = k;
+    G.seed_rar = rmap[r];
     G.tool = T_SEEDS;
-    building = 0;
-    s_clr(); s_add(items[k - 1].name); s_add(" ("); s_add(season_name[crops[k].season]); s_add("): ripe in ");
+    build_cancel();
+    s_clr(); if (G.seed_rar) s_add(G.seed_rar == R_RARE ? "Rare " : "Legendary "); s_add(items[k - 1].name); s_add(" ("); s_add(season_name[crops[k].season]); s_add("): ripe in ");
     s_num(crops[k].days, 0); s_add(" days");
     if (crops[k].regrow) { s_add(", regrows every "); s_num(crops[k].regrow, 0); }
-    s_add(". Sells for G"); s_num(items[k - 1].price, 0); s_ch('.');
+    s_add(". Sells for G"); s_num(items[k - 1].price, 0);
+    if (G.seed_rar) s_add(G.seed_rar == R_RARE ? ", x2 a harvest" : ", x3-4 a harvest");
+    s_ch('.');
     ui_dialog(sbuf);
     return 1;
+}
+
+// "W 12  S 3  Hay 40": the widest spacing that fits the bag's 17 columns
+static void res_line(uint8_t gap) {
+    uint8_t k;
+    s_clr(); s_add("W "); s_num(G.wood, 0);
+    for (k = 0; k < gap; k++) s_ch(' ');
+    s_add("S "); s_num(G.stone, 0);
+    for (k = 0; k < gap; k++) s_ch(' ');
+    s_add("Hay "); s_num(G.hay, 0);
 }
 
 static void bag_page(void) {
@@ -375,11 +415,13 @@ static void bag_page(void) {
             it = mi[top + k]; q = mq[top + k];
             s_clr(); s_ch((char)(0x80 + it)); s_ch(' '); s_add(items[it].name);
             if (q) s_ch(q == 2 ? (char)0xF1 : (char)0xF0);
-            s_pad(14); s_ch('x'); s_num(G.inv[it][q], 3);
+            s_pad(13); s_ch('x'); s_num(G.inv[it][q], 3);   // 17 columns: clear of the right border
             ui_text(2, 1 + k, sbuf);
         }
         if (top + 9 < n) ui_char(18, 10, GL_MORE);
-        s_clr(); s_add("W"); s_num(G.wood, 0); s_add(" S"); s_num(G.stone, 0); s_add(" Hay"); s_num(G.hay, 0);
+        res_line(2);
+        if (s_len() > 17) res_line(1);
+        if (s_len() > 17) { s_clr(); s_ch('W'); s_num(G.wood, 0); s_add(" S"); s_num(G.stone, 0); s_add(" Hay"); s_num(G.hay, 0); }
         ui_text(2, 10, sbuf);
         if (n) item_panel(mi[sel], mq[sel]);
         else { ui_panel(0, 12, 20, 5); s_clr(); s_add("Fert "); s_num(G.fert, 0); s_add("  Water "); s_num(G.water, 0); ui_text(2, 14, sbuf); }
@@ -401,7 +443,7 @@ static void bag_page(void) {
     }
 }
 
-static const char *const npc_names[NUM_NPC] = {"Rosa", "Brick", "June", "Ada", "Mayor Hollis", "Milo"};
+static const char *const npc_names[NUM_NPC] = {"Rosa", "Brick", "June", "Ada", "Hollis", "Milo"};   // hearts start at x=14
 
 static void friends_page(void) {
     uint8_t k, h, j;
@@ -410,11 +452,11 @@ static void friends_page(void) {
     for (k = 0; k < NUM_NPC; k++) {
         ui_text(2, 2 + k * 2, npc_names[k]);
         h = G.friend[k] / 50;
-        for (j = 0; j < 5; j++) ui_char(13 + j, 2 + k * 2, j < h ? GL_HEART : GL_HEART_EMPTY);
+        for (j = 0; j < 5; j++) ui_char(14 + j, 2 + k * 2, j < h ? GL_HEART : GL_HEART_EMPTY);
     }
     s_clr(); s_add(G.pet_name); ui_text(2, 14, sbuf);
     h = G.pet_love / 50;
-    for (j = 0; j < 5; j++) ui_char(13 + j, 14, j < h ? GL_HEART : GL_HEART_EMPTY);
+    for (j = 0; j < 5; j++) ui_char(14 + j, 14, j < h ? GL_HEART : GL_HEART_EMPTY);
     wait_button();
 }
 
@@ -430,8 +472,8 @@ static void farm_page(void) {
     ui_text(2, 2, sbuf);
     s_clr(); s_add("Gold"); s_pad(8); s_num(G.gold, 8); ui_text(2, 4, sbuf);
     ui_text(2, 5, "Energy");
-    segs = (uint8_t)(((uint16_t)G.energy * 10 + G.energy_max - 1) / G.energy_max);
-    for (k = 0; k < 10; k++) ui_char(8 + k, 5, k < segs ? GL_BAR_FULL : GL_BAR_EMPTY);
+    segs = (uint8_t)(((uint16_t)G.energy * 9 + G.energy_max - 1) / G.energy_max);   // 9 segments: a gap after the label
+    for (k = 0; k < 9; k++) ui_char(9 + k, 5, k < segs ? GL_BAR_FULL : GL_BAR_EMPTY);
     s_clr(); s_add("Land"); s_pad(8); s_num(plots, 2); s_add(" of 16"); ui_text(2, 7, sbuf);
     s_clr(); s_add("Buildings"); s_pad(13); s_num(blds, 2); ui_text(2, 8, sbuf);
     s_clr(); s_add("Animals"); s_pad(13); s_num(anim, 2); ui_text(2, 9, sbuf);
@@ -441,18 +483,19 @@ static void farm_page(void) {
     wait_button();
 }
 
-static const char *const farm_items[6] = {"STATUS", "MAP", "CALENDAR", "FRIENDS", "GOODS", "BACK"};
+static const char *const farm_items[7] = {"STATUS", "MAP", "CALENDAR", "FRIENDS", "GOODS", "STAFF", "BACK"};
 static void farm_menu(void) {
-    uint8_t r = ui_menu(8, 2, 12, farm_items, 6, 0);
+    uint8_t r = ui_menu(8, 2, 12, farm_items, 7, 0);
     ui_end(); ui_begin();
     if (r == 0) farm_page();
     else if (r == 1) map_page();
     else if (r == 2) calendar_page();
     else if (r == 3) friends_page();
     else if (r == 4) collection_page();
+    else if (r == 5) staff_page();
 }
 
-static const char *const sm_items[8] = {"TOOLS", "SEEDS", "BAG", "BUILD", "FARM", "OPTIONS", "SAVE", "EXIT"};
+static const char *const sm_items[8] = {"TOOLS", "SEEDS", "BAG", "BUILD", "FARM", "OPTION", "SAVE", "EXIT"};   // 6 cols beside the panel
 
 void start_menu(void) BANKED {
     static uint8_t sel;

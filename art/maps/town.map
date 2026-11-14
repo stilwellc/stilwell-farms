@@ -65,5 +65,22 @@ place TOWN_HOUSE_B 28 12 act=HOUSE
 act 13 8 BOARD
 act 15 12 FOUNTAIN
 act 16 12 FOUNTAIN
+# businesses: vacant storefronts you can buy (biz.c draws the opened shop over them when owned)
+place VACANT_SHOP 24 7
+place VACANT_SHOP 28 7
+place VACANT_SHOP 3 16
+place VACANT_SHOP 26 16
+act 24 9 BAKERY
+act 25 9 BAKERY
+act 26 9 BAKERY
+act 28 9 JUICEBAR
+act 29 9 JUICEBAR
+act 30 9 JUICEBAR
+act 3 18 CREAMERY
+act 4 18 CREAMERY
+act 5 18 CREAMERY
+act 26 18 FLORIST
+act 27 18 FLORIST
+act 28 18 FLORIST
 warp 15 0 FARM 15 30 up
 warp 16 0 FARM 16 30 up

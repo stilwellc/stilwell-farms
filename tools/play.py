@@ -8,6 +8,7 @@ SCRIPT is a string of ';'-separated commands:
   h BTN N    hold BTN for N frames
   s NAME     save screenshot NAME.png (scaled 3x)
   r N CMD    repeat CMD (a single p/h) N times
+  poke OFF V / peek OFF [N]   write / print GameState bytes (offsets: see OFF)
 """
 import argparse, os, sys
 from pyboy import PyBoy
@@ -43,7 +44,7 @@ import re
 from collections import deque
 _map = open(args.rom.replace('.gbc', '.map')).read()
 GADDR = int(re.search(r'([0-9A-F]{8})\s+_G\b', _map).group(1), 16)
-OFF = dict(cell=3, a1=1027, a2=2051, plots=3075, bld=3077, gold=3289, time=3301, day=3303, season=3304, energy=3306, px=3308, py=3309, facing=3310, scene=3311, tool=3312, wood=3462, stone=3464, style=3321, inv=3325)
+OFF = dict(cell=3, a1=1027, a2=2051, plots=3075, bld=3077, gold=3289, time=3301, day=3303, season=3304, energy=3306, px=3308, py=3309, facing=3310, scene=3311, tool=3312, wood=3495, stone=3497, style=3321, inv=3325, anim=3157, seeds=3445, year=3305)
 WALK = {0, 1, 2, 9, 10, 15, 21}
 DIRS = {'down': (0, 1, 0), 'up': (0, -1, 1), 'left': (-1, 0, 2), 'right': (1, 0, 3)}
 
@@ -134,6 +135,9 @@ def run(cmd):
         go(int(parts[1]), int(parts[2]))
     elif op == 'poke':  # poke OFFSET VALUE (byte offset into GameState)
         pb.memory[GADDR + int(parts[1])] = int(parts[2])
+    elif op == 'peek':  # peek OFFSET [N]: print N bytes of GameState from OFFSET
+        n = int(parts[2]) if len(parts) > 2 else 1
+        print('PEEK', parts[1], [pb.memory[GADDR + int(parts[1]) + k] for k in range(n)])
     elif op == 'rich':  # test cheat: lots of gold/wood/stone
         for k, b in enumerate((0x40, 0x42, 0x0F, 0)):
             pb.memory[GADDR + OFF['gold'] + k] = b

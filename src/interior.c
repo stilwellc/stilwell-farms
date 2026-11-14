@@ -57,8 +57,8 @@ static uint8_t furn_add(uint8_t kind, uint8_t x, uint8_t y) {
 }
 
 static void furn_defaults(void) {   // Grandpa left a bed, an old TV and his diary desk
-    if (G.furn_init) return;
-    G.furn_init = 1;
+    if (G.furn_init & 1) return;
+    G.furn_init |= 1;
     memset(G.furn, 0, sizeof(G.furn));
     furn_add(FK_BED, 1, 2);
     furn_add(FK_TV, 4, 2);
@@ -91,8 +91,8 @@ void house_enter(void) BANKED {
     map_select(m);   // read the doorway position (the first warp is the mat)
     sfx(SFX_STEP);
     enter_scene(m, sc_warps[0].x, sc_warps[0].y - 1, D_UP);
-    if (!(G.tips & 0x80)) {
-        G.tips |= 0x80;
+    if (!(G.furn_init & 2)) {   // first visit (G.tips is full: bit 0x80 is the 1000G tip)
+        G.furn_init |= 2;
         say("Home sweet home! Open START, then BUILD, to buy and arrange furniture.");
         say("Sleep in the bed to end the day. The TV has tomorrow's weather.");
     }
@@ -161,7 +161,7 @@ void interior_act(void) BANKED {
         break;
     case FK_TV: {
         static const char *const fc[4] = {"sunny skies", "rain showers", "snow", "thunderstorms"};
-        ui_speaker = "TV";
+        set_speaker("TV");
         s_clr(); s_add("And now the weather. Tomorrow: "); s_add(fc[G.tomorrow & 3]); s_ch('!');
         say(sbuf);
         say(tips[(uint8_t)(G.day + G.season * 7 + G.year) % 10]);
@@ -246,10 +246,10 @@ void furn_place(void) BANKED {
     if (!w) return;
     if (f_mode == 2) {   // sell back
         uint16_t back;
-        if (!ok) { hud_flash("Nothing to sell there."); return; }
+        if (!ok) { hud_flash("Nothing to sell."); return; }
         k = furn_at(x0, y0);
         kind = G.furn[k][0];
-        if (kind == FK_BED) { hud_flash("Better keep your bed!"); return; }
+        if (kind == FK_BED) { hud_flash("Keep your bed!"); return; }
         back = fdef[kind].price >> 1;
         s_clr(); s_add("Sell the "); s_add(fdef[kind].name); s_add(" back for G"); s_num(back, 0); s_ch('?');
         if (!ui_yesno(sbuf)) return;
@@ -262,13 +262,13 @@ void furn_place(void) BANKED {
     }
     if (f_mode == 1) {   // move: pick up, then set down
         if (carry == 0xFF) {
-            if (!ok) { hud_flash("Nothing to move there."); return; }
+            if (!ok) { hud_flash("Nothing to move."); return; }
             carry = furn_at(x0, y0);
             sfx(SFX_CONFIRM);
-            hud_flash("Picked up! A to set it down.");
+            hud_flash("Picked up! A=place");
             return;
         }
-        if (!ok) { sfx(SFX_BUMP); hud_flash("Can't put it there."); return; }
+        if (!ok) { sfx(SFX_BUMP); hud_flash("Can't put it here."); return; }
         {
             uint8_t ox = G.furn[carry][1], oy = G.furn[carry][2];
             G.furn[carry][1] = x0; G.furn[carry][2] = y0;
@@ -282,11 +282,11 @@ void furn_place(void) BANKED {
     kind = cat[f_sel];
     if (!ok) {
         sfx(SFX_BUMP);
-        hud_flash((fdef[kind].flags & FF_WALL) ? "Face a bare wall." : "Can't put it there.");
+        hud_flash((fdef[kind].flags & FF_WALL) ? "Face a bare wall." : "Can't put it here.");
         return;
     }
     if (G.gold < fdef[kind].price) { sfx(SFX_BUMP); hud_flash("Not enough gold."); return; }
-    if (furn_add(kind, x0, y0) == 0xFF) { sfx(SFX_BUMP); hud_flash("Your house is full!"); return; }
+    if (furn_add(kind, x0, y0) == 0xFF) { sfx(SFX_BUMP); hud_flash("House is full!"); return; }
     G.gold -= fdef[kind].price;
     redraw_rect(x0, y0, w, h);
     dust(x0, y0);

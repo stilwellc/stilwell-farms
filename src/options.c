@@ -14,7 +14,7 @@ void options_menu(void) BANKED {
     uint8_t sel = 0, k, t = 0;
     ui_box(0, 0, 20, 14);
     ui_title(2, 0, "OPTIONS");
-    ui_text(2, 12, "A/<> change  B back");
+    ui_text(1, 12, "A: change  B: back");   // fits inside the box (no < > glyphs in the font)
     while (1) {
         static const char *const names[5] = {"Text", "Music", "Sound", "Clock", "Run"};
         for (k = 0; k < 5; k++) {

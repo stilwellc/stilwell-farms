@@ -46,7 +46,7 @@ void fish_start(void) BANKED {
     if (!spend_energy(4)) return;
     player_pose(4, 255);
     sfx(SFX_SPLASH);
-    hud_flash("Waiting for a bite...");
+    hud_flash("Wait for a bite...");
     wait = 60 + (rnd() & 127);
     for (t = 0; t < wait; t++) {
         put16(2, (int16_t)(x * 16) - scx, (int16_t)(y * 16) - scy + ((t >> 4) & 1), SPR_BOBBER, SPR_BOBBER_PAL, 0);
@@ -86,7 +86,7 @@ void fish_start(void) BANKED {
     }
     ui_end();
     player_pose(0, 0);
-    if (!prog) { sfx(SFX_CANCEL); hud_flash("The fish slipped away!"); return; }
+    if (!prog) { sfx(SFX_CANCEL); hud_flash("It slipped away!"); return; }
     music_play(MUS_JINGLE_CATCH);
     inv_add(f, d >= 3 && (rnd() & 1) ? 1 : 0, 1);
     G.stat_fish++;

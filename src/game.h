@@ -28,6 +28,11 @@ enum {  // cell types
 #define SOIL_FERT 0x40
 #define SOIL_CROP 0x1F
 #define CROP_WITHERED 31
+#define SOIL_RAR 0xC0        // a2 top 2 bits: seed rarity (0 common, 1 rare, 2 legendary)
+#define SOIL_DAYS 0x3F       // a2 low 6 bits: days grown
+#define SOIL_GROWN(i) (G.a2[i] & SOIL_DAYS)
+#define SOIL_RARITY(i) (G.a2[i] >> 6)
+enum { R_COMMON, R_RARE, R_LEGEND, NUM_RARITY };
 // C_DECOR: a1 = decor kind, a2 = autotile variant
 // C_TREE: a1 = fruit kind << 5 | fruit-days (0..31), a2 = age
 // C_STRUCT: a1 = building slot, a2 = part index
@@ -52,6 +57,7 @@ enum {
     I_MINNOW, I_BASS, I_TROUT, I_CATFISH, I_CARP, I_KOI,                        // 24..29 fish
     I_COPPER, I_IRON, I_GOLD, I_GEM,                                            // 30..33 ore
     I_JUICE, I_CIDER, I_CHEESE, I_JAM, I_PICKLES,                               // 34..38 goods
+    I_WOOL,                                                                     // 39 sheep (rarity)
     NUM_ITEMS
 };
 #define NUM_CROPS 14
@@ -76,14 +82,25 @@ enum { D_DOWN, D_UP, D_LEFT, D_RIGHT };
 
 // ---- people & animals ------------------------------------------------------------
 enum { NPC_ROSA, NPC_BRICK, NPC_JUNE, NPC_ADA, NPC_HOLLIS, NPC_MILO, NUM_NPC };
-enum { A_COW, A_HEN };
+enum { A_COW, A_HEN, A_SHEEP };   // sheep share the barn with cows
 #define MAX_ANIMALS 12
 typedef struct { uint8_t kind, home, happy, age, flags; char name[6]; } Animal;  // kind 0xFF empty
 #define AF_FED 0x01
 #define AF_PET 0x02
 #define AF_READY 0x04
+#define AF_BREED 0xC0       // breed rarity in the top 2 bits: 0 common, 1 rare (Jersey/brown), 2 legendary (golden)
+#define BREED(a) ((a)->flags >> 6)
+#define AF_WOOL 0x18        // sheep: fed days of fleece growth (bits 3-4); wool is ready every WOOL_DAYS
+#define WOOL_DAYS 3
+#define ADULT_AGE 7         // babies give no produce and can't breed until this many days old
+#define BARN_CAP 6          // cows + sheep per barn
+
+// ---- farmhands (staff.c): one hire per role; G.staff[role] = candidate name + 1, 0 = vacant
+enum { ROLE_WATER, ROLE_HARVEST, ROLE_RANCH, ROLE_GROUNDS, ROLE_SHOP, NUM_ROLES };
 
 // ---- persistent state (one save slot) ----------------------------------------------
+#define NUM_BIZ 4               // town businesses
+#define PANTRY 8                // ingredient slots per business
 #define SAVE_MAGIC 0x5F17
 #define SAVE_VERSION 4
 #define MAX_FURN 24             // house furniture pieces (interior.c)
@@ -105,7 +122,7 @@ typedef struct {
     uint8_t water;
     uint8_t weather, tomorrow;      // 0 sun 1 rain 2 snow 3 storm
     uint8_t inv[NUM_ITEMS][3];      // count per quality (normal, silver, gold)
-    uint8_t seeds[NUM_CROPS + 1];
+    uint8_t seeds[NUM_CROPS + 1][NUM_RARITY];   // count per seed rarity
     uint8_t saplings[4];            // apple, peach, orange, cherry
     uint8_t fert;
     uint16_t wood, stone, hay;
@@ -125,6 +142,20 @@ typedef struct {
     // v4: house interior furniture {kind (0 empty), x, y}; furn_init 0 = Grandpa's furniture not placed yet
     uint8_t furn_init;
     uint8_t furn[MAX_FURN][3];
+    // staff
+    uint8_t staff[NUM_ROLES];       // hired farmhand per role (name index + 1), 0 = vacant
+    uint8_t staff_unpaid;           // bit per role: worked unpaid last night (quits if unpaid again)
+    uint16_t staff_wage[NUM_ROLES]; // daily wage, recalculated nightly from the farm's size
+    // businesses (town storefronts, biz.c): index 0 Bakery, 1 Juice Bar, 2 Creamery, 3 Florist
+    uint8_t biz_owned;              // bit per business
+    uint8_t biz_staffed;            // bit per business: employees hook (+2 a night; see BIZ_NEEDS_STAFF)
+    uint8_t biz_level[NUM_BIZ];     // upgrades 0..2
+    uint8_t biz_pantry[NUM_BIZ][PANTRY];   // ingredient counts; slot -> item in biz.c pan_item
+    uint16_t biz_today[NUM_BIZ];    // last night's earnings
+    uint16_t biz_made[NUM_BIZ];     // products sold, lifetime
+    uint8_t biz_sold[NUM_BIZ];      // products sold last night
+    // rarity
+    uint8_t seed_rar;               // rarity of the selected seed packet
     uint16_t checksum;
 } GameState;
 extern GameState G;
@@ -161,19 +192,20 @@ uint8_t walkable(uint8_t x, uint8_t y);
 void player_pose(uint8_t pose, uint8_t frames);
 void music_for_scene(void);
 
-// view.c (tile cache + streaming)
-mt_t cell_mt(uint8_t x, uint8_t y);
-void view_reset(void);
-void view_update(void);
-void redraw_cell(uint8_t x, uint8_t y);
-void redraw_rect(uint8_t x, uint8_t y, uint8_t w, uint8_t h);
-void view_tick(void);
-uint8_t owned(uint8_t x, uint8_t y);
-void bg_copy_row(uint8_t screen_row, uint8_t *tiles, uint8_t *attrs);
-void ui_put_mt(uint8_t x, uint8_t y, mt_t m);
-void ui_put_quad(uint8_t x, uint8_t y, mt_t m, uint8_t k);
-void ui_put_struct(uint8_t x, uint8_t y, mt_t first, uint8_t w, uint8_t h);
-void ui_art_release(void);
+// view.c (banked: tile cache + streaming)
+mt_t cell_mt(uint8_t x, uint8_t y) BANKED;
+void view_reset(void) BANKED;
+void view_update(void) BANKED;
+void redraw_cell(uint8_t x, uint8_t y) BANKED;
+void redraw_rect(uint8_t x, uint8_t y, uint8_t w, uint8_t h) BANKED;
+void view_tick(void) BANKED;
+uint8_t owned(uint8_t x, uint8_t y);  // main.c (bank 0)
+void bg_to_win(void) BANKED;          // ui_begin: copy the visible BG into the window map
+void win_row(uint8_t row, const uint8_t *tiles) BANKED;   // 20 tiles (UI attribute) into a window row
+void ui_put_mt(uint8_t x, uint8_t y, mt_t m) BANKED;
+void ui_put_quad(uint8_t x, uint8_t y, mt_t m, uint8_t k) BANKED;
+void ui_put_struct(uint8_t x, uint8_t y, mt_t first, uint8_t w, uint8_t h) BANKED;
+void ui_art_release(void) BANKED;
 
 // ui.c
 void ui_begin(void);
@@ -195,11 +227,13 @@ void ui_panel(uint8_t x, uint8_t y, uint8_t w, uint8_t h) BANKED;
 void ui_money(void) BANKED;
 void item_panel(uint8_t it, uint8_t q) BANKED;
 void crop_panel(uint8_t crop) BANKED;
+void crop_panel_r(uint8_t crop, uint8_t rar) BANKED;
 void status_panel(void) BANKED;
 void calendar_page(void) BANKED;
 void map_page(void) BANKED;
 extern uint8_t *ui_hover;        // when set, ui_menu returns 0xFE after the cursor moves (sel stored here)
 extern const char *ui_speaker;
+void set_speaker(const char *s);   // bank 0: copies the name to RAM (use from banked code)
 extern char sbuf[96];
 extern char lbl[14][19];          // shared menu label buffers
 extern const char *lp[14];
@@ -220,7 +254,7 @@ void mark_shipped(uint8_t it) BANKED;
 extern const uint8_t item_icon_tile[NUM_ITEMS];
 uint8_t spend_energy(uint8_t e) BANKED;
 uint8_t pay(uint32_t g, uint16_t w, uint16_t s) BANKED;
-void flash_gain(const char *what, uint8_t n) BANKED;
+void flash_gain(const char *what, uint8_t n);   // bank 0
 void cost_str(uint32_t g, uint16_t w, uint16_t s) BANKED;
 extern const char *const season_name[4];
 
@@ -249,6 +283,7 @@ void farm_act(void) BANKED;
 // menus.c (banked)
 void start_menu(void) BANKED;
 void build_place(void) BANKED;
+void build_cancel(void) BANKED;
 uint8_t build_cursor(uint8_t *x0, uint8_t *y0, uint8_t *w, uint8_t *h) BANKED;
 // interior.c (banked): house interiors + furniture
 void house_enter(void) BANKED;
@@ -270,12 +305,22 @@ uint8_t actor_at(uint8_t x, uint8_t y) BANKED;
 uint8_t actor_npc(uint8_t a) BANKED;
 uint8_t actor_animal(uint8_t a) BANKED;
 uint8_t actor_is_pet(uint8_t a) BANKED;
+uint8_t actor_staff(uint8_t a) BANKED;   // farmhand role or 0xFF
 // goals.c (banked)
 void goals_check(void) BANKED;
 void read_mail(void) BANKED;
 void board_act(void) BANKED;
 void hall_act(void) BANKED;
 void collection_page(void) BANKED;
+// staff.c (banked): farmhands
+void staff_overnight(void) BANKED;      // payroll, then the night's work (called from world_overnight)
+void staff_report(void) BANKED;         // morning report lines
+uint8_t staff_hall(void) BANKED;        // town hall menu; 1 = talk to Hollis as usual
+void staff_page(void) BANKED;           // STAFF page: list, wages, fire
+void staff_talk(uint8_t role) BANKED;   // A on a farmhand
+uint16_t staff_spot(uint8_t role) BANKED;   // where they work today: x | y << 8, 0xFFFF = off the farm
+uint8_t staff_pal(uint8_t role) BANKED;
+uint8_t staff_hired(uint8_t role) BANKED;   // e.g. staff_hired(ROLE_SHOP) for town businesses
 // fishing.c (banked)
 void fish_start(void) BANKED;
 // save.c (banked)
@@ -285,6 +330,11 @@ uint8_t save_load(uint8_t slot) BANKED;
 extern uint8_t save_slot;
 // title.c (banked)
 uint8_t title_screen(void) BANKED;
+// biz.c (banked): town businesses
+mt_t biz_mt(uint8_t x, uint8_t y) BANKED;     // opened-shop art over an owned storefront, else 0xFFFF
+void biz_act(uint8_t b) BANKED;
+void biz_overnight(void) BANKED;
+void biz_report(void) BANKED;
 // options.c (banked)
 void options_menu(void) BANKED;
 #endif

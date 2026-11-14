@@ -39,7 +39,7 @@ uint8_t spend_energy(uint8_t e) BANKED {
         return 0;
     }
     G.energy -= e;
-    if (G.energy < 15 && G.energy + e >= 15) hud_flash("You're getting tired...");
+    if (G.energy < 15 && G.energy + e >= 15) hud_flash("Getting tired...");
     return 1;
 }
 
@@ -50,12 +50,6 @@ uint8_t pay(uint32_t g, uint16_t w, uint16_t s) BANKED {
     }
     G.gold -= g; G.wood -= w; G.stone -= s;
     return 1;
-}
-
-void flash_gain(const char *what, uint8_t n) BANKED {
-    sfx(SFX_COIN);
-    s_clr(); s_ch('+'); s_num(n, 0); s_ch(' '); s_add(what);
-    hud_flash(sbuf);
 }
 
 void cost_str(uint32_t g, uint16_t w, uint16_t s) BANKED {

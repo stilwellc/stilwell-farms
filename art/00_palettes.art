@@ -15,6 +15,11 @@ palette obj N MERCHANT 000000 f8d0a0 48a048 181830
 palette obj K CURSOR   000000 f8f8f8 f8d030 101018
 palette obj F FX       000000 f8f8f8 88c8f8 2850a0
 palette obj A ANIMAL   000000 f8f8f8 c88850 302018
+# farmhands use STAFF and the next palette (BREEDRARE doubles as the harvester's colours: only 8 slots)
+palette obj H STAFF    000000 f8d0a0 d04830 181830
+# rarity: animal breeds (same sprite tiles, recoloured). Rare = Jersey cow / brown hen, Legendary = golden.
+palette obj J BREEDRARE 000000 d89850 f8e0b0 3c2010
+palette obj Y BREEDGOLD 000000 f8d038 f8f8c0 785010
 
 # Seasonal grass: summer deepens, fall turns golden, winter snows over (trees and green roofs follow)
 season GRASS SUMMER c8e890 6cb440 2c7830 102c1c

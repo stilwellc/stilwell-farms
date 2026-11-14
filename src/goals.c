@@ -90,7 +90,7 @@ static void review(void) {
     for (k = 0; k < NUM_ITEMS; k++) if (G.shipped[k >> 3] & (1 << (k & 7))) n++;
     score += n * 2;
     score += (uint16_t)(G.earned / 2000 > 100 ? 100 : G.earned / 2000);
-    ui_speaker = "Grandpa";
+    set_speaker("Grandpa");
     say("A whole year has passed. I've been watching from up here, and I'd like to tell you what I see.");
     s_clr(); s_add("Your farm scores "); s_num(score, 0); s_add(" points.");
     say(sbuf);
@@ -112,7 +112,8 @@ void read_mail(void) BANKED {
         if (g != GOAL_REVIEW && g >= NUM_GOALS) continue;   // no jingle left playing for a skipped bit
         music_play(MUS_JINGLE_FANFARE);
         if (g == GOAL_REVIEW) { review(); music_for_scene(); return; }
-        ui_speaker = "Grandpa";
+        if (g >= NUM_GOALS) continue;
+        set_speaker("Grandpa");
         say(letters[g]);
         ui_speaker = 0;
         G.gold += rewards[g];
@@ -169,7 +170,7 @@ static uint8_t festival_today(void) {
 
 void hall_act(void) BANKED {
     uint8_t k, bit = 1 << G.season;
-    ui_speaker = "Hollis";
+    set_speaker("Hollis");
     if (festival_today()) {
         static const char *const names[4] = {"Flower Show", "Crop Fair", "Harvest Festival", "Star Night"};
         s_clr(); s_add("Welcome to the "); s_add(names[G.season]); s_add("!");
@@ -225,7 +226,7 @@ void collection_page(void) BANKED {
         ui_char(2 + (k % 8) * 2, 2 + (k / 8) * 2, have ? item_icon_tile[k] : font_map['?' - 32]);
         if (have) n++;
     }
-    s_clr(); s_add("Sold "); s_num(n, 0); s_add(" of "); s_num(NUM_ITEMS, 0); s_add(" goods");
+    s_clr(); s_add("Sold "); s_num(n, 0); s_ch('/'); s_num(NUM_ITEMS, 0); s_add(" goods");   // fits inside the box
     ui_text(2, 14, sbuf);
     while (1) {
         read_input();

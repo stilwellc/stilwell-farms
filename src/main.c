@@ -22,35 +22,70 @@ void wait_frames(uint8_t n) {
     while (n--) wait_vbl_done();
 }
 
-uint8_t rnd(void) {
-    uint16_t x = ((uint16_t)G.rng_hi << 8) | G.rng_lo;
-    if (!x) x = 0xACE1;
-    x ^= x << 7;
-    x ^= x >> 9;
-    x ^= x << 8;
-    G.rng_lo = (uint8_t)x;
-    G.rng_hi = (uint8_t)(x >> 8);
-    return (uint8_t)(x ^ (x >> 8));
+static const uint8_t bit8[8] = {1, 2, 4, 8, 16, 32, 64, 128};
+uint8_t owned(uint8_t x, uint8_t y) {   // byte + mask lookup (a variable 16-bit shift is a slow loop)
+    uint8_t p = PLOT_OF(x, y);
+    return (((const uint8_t *)&G.plots)[p >> 3] & bit8[p & 7]) ? 1 : 0;
+}
+
+uint8_t rnd(void) {   // xorshift16 (7, 9, 8) done bytewise: the 16-bit shifts compiled to slow loops
+    uint8_t lo = G.rng_lo, hi = G.rng_hi, t;
+    if (!(lo | hi)) { lo = 0xE1; hi = 0xAC; }
+    t = (uint8_t)(hi << 7) | (lo >> 1);   // x ^= x << 7
+    hi ^= t;
+    lo ^= (uint8_t)(lo << 7);
+    lo ^= hi >> 1;                        // x ^= x >> 9
+    hi ^= lo;                             // x ^= x << 8
+    G.rng_lo = lo;
+    G.rng_hi = hi;
+    return lo ^ hi;
 }
 
 // ---------------------------------------------------------------- palettes
 static uint16_t pbuf[32];
 static uint8_t cur_tint = 0xFF, cur_fade, cur_season = 0xFF;
 
-static void pal_build(const uint16_t *src, uint8_t tint, uint8_t fade, uint8_t skip_ui) {
-    uint8_t i;
-    for (i = 0; i < 32; i++) {
-        uint16_t c = src[i];
-        uint8_t r = c & 31, g = (c >> 5) & 31, b = (c >> 10) & 31;
-        if (!(skip_ui && (i >> 2) == PAL_UI)) {
-            if (tint == 1) { r = (r * 15) >> 4; g = (g * 12) >> 4; b = (b * 9) >> 4; }
-            else if (tint == 2) { r = (r * 6) >> 4; g = (g * 7) >> 4; b = ((b * 10) >> 4) + 4; }
-            else if (tint == 3) { r = (r * 12) >> 4; g = (g * 12) >> 4; b = ((b * 13) >> 4) + 1; }
-            else if (tint == 4) { r = (r * 9) >> 4; g = (g * 9) >> 4; b = ((b * 11) >> 4) + 2; }
-        }
-        if (fade) { r = (r * (8 - fade)) >> 3; g = (g * (8 - fade)) >> 3; b = (b * (8 - fade)) >> 3; }
-        if (b > 31) b = 31;
-        pbuf[i] = r | (g << 5) | ((uint16_t)b << 10);
+// Tint and fade scale each 5-bit channel by k/16. Per push that is 192 multiplies, which as C
+// multiplies (__mulint calls) took longer than a frame and stretched every fade step to 3 frames.
+// Instead build 32-entry ramps once per push (tint folded with fade) and look the channels up.
+static uint8_t ramp_r[32], ramp_g[32], ramp_b[32], ramp_f[32];
+static void ramp(uint8_t *t, uint8_t k) {   // t[v] = (v * k) >> 4, k <= 16: at most one carry per step
+    uint8_t v, q = 0, rem = 0;
+    for (v = 32; v; v--) {
+        *t++ = q;
+        rem += k;
+        if (rem >= 16) { rem -= 16; q++; }
+    }
+}
+//                                       r   g   b  +b   (tint 0 none, 1 dusk, 2 night, 3 rain, 4 storm)
+static const uint8_t tint_k[5][4] = {{16, 16, 16, 0}, {15, 12, 9, 0}, {6, 7, 10, 4}, {12, 12, 13, 1}, {9, 9, 11, 2}};
+
+static void pal_ramps(uint8_t tint, uint8_t fade) {
+    uint8_t v, off = tint_k[tint][3];
+    ramp(ramp_f, (uint8_t)(8 - fade) << 1);   // (v * (8 - fade)) >> 3; fade 0 = identity
+    ramp(ramp_r, tint_k[tint][0]);
+    ramp(ramp_g, tint_k[tint][1]);
+    ramp(ramp_b, tint_k[tint][2]);
+    for (v = 0; v < 32; v++) {                // tinted value (b + off <= 26), then faded
+        ramp_r[v] = ramp_f[ramp_r[v]];
+        ramp_g[v] = ramp_f[ramp_g[v]];
+        ramp_b[v] = ramp_f[(uint8_t)(ramp_b[v] + off)];
+    }
+}
+
+static void pal_build(const uint16_t *src, uint8_t skip_ui) {   // UI palette (7): fade only
+    uint8_t n;
+    const uint8_t *s = (const uint8_t *)src, *tr = ramp_r, *tg = ramp_g, *tb = ramp_b;
+    uint8_t *d = (uint8_t *)pbuf;
+    for (n = 0; n < 32; n++) {
+        uint8_t lo, hi, r, g, b;
+        if (n == PAL_UI * 4 && skip_ui) tr = tg = tb = ramp_f;
+        lo = *s++; hi = *s++;                  // 0bbbbbgg gggrrrrr
+        r = tr[lo & 31];
+        g = tg[(uint8_t)(lo >> 5) | (uint8_t)((hi & 3) << 3)];
+        b = tb[(uint8_t)(hi >> 2)];
+        *d++ = r | (uint8_t)(g << 5);
+        *d++ = (uint8_t)(g >> 3) | (uint8_t)(b << 2);
     }
 }
 
@@ -64,9 +99,10 @@ static uint8_t want_tint(void) {
 }
 
 static void pal_push(uint8_t tint, uint8_t fade) {
-    pal_build(season_pal[G.season & 3], tint, fade, 1);
+    pal_ramps(tint, fade);
+    pal_build(season_pal[G.season & 3], 1);
     set_bkg_palette(0, 8, pbuf);
-    pal_build(obj_pal_base, tint, fade, 0);
+    pal_build(obj_pal_base, 0);
     set_sprite_palette(0, 8, pbuf);
 }
 
@@ -80,6 +116,7 @@ void apply_palettes(void) {
 
 void fade_out(void) {
     uint8_t f;
+    if (cur_fade == 8) return;   // already black (e.g. the overnight fade before new_morning's enter_scene)
     for (f = 1; f <= 8; f++) { pal_push(cur_tint == 0xFF ? 0 : cur_tint, f); wait_frames(2); }
     cur_fade = 8;
 }
@@ -115,10 +152,7 @@ void music_for_scene(void) {
 
 // ---------------------------------------------------------------- HUD (window row 0)
 uint8_t hud_timer, hud_row;
-void hud_put(uint8_t x, uint8_t t) {
-    VBK_REG = 1; set_win_tile_xy(x, hud_row, GL_ATTR);
-    VBK_REG = 0; set_win_tile_xy(x, hud_row, t);
-}
+void hud_put(uint8_t x, uint8_t t) { ui_char(x, hud_row, t); }
 
 void hud_draw_row(uint8_t row) {
     hud_row = row;
@@ -255,10 +289,15 @@ static void clamp_cam(int16_t x, int16_t y) {
     scx = x; scy = y;
 }
 
+// The scroll registers are written by the VBL interrupt from these copies, set once a frame's tiles
+// and sprites are ready: a mid-frame move_bkg tore the screen and ran ahead of the shadow OAM.
+static uint8_t vbl_sx, vbl_sy;
+static void scroll_vbl(void) { SCX_REG = vbl_sx; SCY_REG = vbl_sy; }
+static void scroll_latch(void) { CRITICAL { vbl_sx = (uint8_t)scx; vbl_sy = (uint8_t)scy; } }
+
 static void camera(void) {
     clamp_cam((int16_t)ppx - 72, (int16_t)ppy - 64);
     view_update();
-    move_bkg(scx, scy);
 }
 
 void enter_scene(uint8_t sc, uint8_t x, uint8_t y, uint8_t facing) {
@@ -274,6 +313,7 @@ void enter_scene(uint8_t sc, uint8_t x, uint8_t y, uint8_t facing) {
     walk_frame = 0; pose_timer = 0;
     clamp_cam((int16_t)ppx - 72, (int16_t)ppy - 64);
     view_reset();
+    scroll_latch();
     move_bkg(scx, scy);
     actors_spawn();
     move_win(7, 136);
@@ -402,7 +442,7 @@ static void field_loop(void) {
                 continue;
             } else if (joy_press & J_SELECT) {
                 sfx(SFX_CURSOR);
-                if (building) { building = 0; hud_draw(); }
+                if (building) { build_cancel(); hud_draw(); }
                 else { G.tool = (G.tool + 1) % NUM_TOOLS; tool_toast(); }
             } else if (joy_press & J_A) {
                 if (building) build_place();
@@ -410,7 +450,7 @@ static void field_loop(void) {
                 hud_draw();
                 continue;
             } else if ((joy_press & J_B) && building) {
-                building = 0;
+                build_cancel();
                 hud_draw();
             } else if (d != 0xFF) {
                 if (d != G.facing) {
@@ -445,6 +485,7 @@ static void field_loop(void) {
         camera();
         view_tick();
         update_sprites();
+        scroll_latch();
         wait_vbl_done();
     }
 }
@@ -458,7 +499,7 @@ void main(void) {
     HIDE_WIN;
     hide_sprites();
     G.opt_music = G.opt_sfx = 1;
-    CRITICAL { add_VBL(music_tick); }
+    CRITICAL { add_VBL(scroll_vbl); add_VBL(music_tick); }
     set_interrupts(VBL_IFLAG);
     enable_interrupts();
     DISPLAY_ON;

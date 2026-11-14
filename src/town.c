@@ -24,7 +24,7 @@ static void sell_menu(void) {
                 if (!G.inv[it][q]) continue;
                 s_clr(); s_ch((char)(0x80 + it)); s_add(items[it].name);
                 if (q) s_ch(q == 2 ? (char)0xF1 : (char)0xF0);
-                s_pad(11); s_ch('x'); s_num(G.inv[it][q], 2); s_pad(14); s_num(item_value(it, q), 3);
+                s_pad(10); s_ch('x'); s_num(G.inv[it][q], 2); s_ch(' '); s_pad(14); s_num(item_value(it, q), 3);
                 lbl_set(n); mi[n] = it; mq[n] = q; n++;
             }
         }
@@ -54,11 +54,29 @@ static void sell_menu(void) {
 }
 
 // ---------------------------------------------------------------- general store (Rosa)
+// rarity: Rare packets cost 3x and yield 2; Legendary cost 8x, yield 3-4 at gold odds, and (like golden
+// animals) Rosa only stocks them for proven farmers: Year 2, or G20000 earned.
+static const uint8_t rar_mult[NUM_RARITY] = {1, 3, 8};
+static uint8_t legend_ok(void) { return G.year > 1 || G.earned >= 20000; }
+static void legend_locked(void) {
+    ui_dialog("The legendary stock is for proven farmers. Earn G20000 or come back next year, and it's yours!");
+}
+static const char *const tier_items[NUM_RARITY] = {"Common", "Rare  x3", "Legend x8"};
+
 static void buy_seeds(void) {
-    uint8_t k, n = 0, map[NUM_CROPS], r, q, max, green = bld_find(B_GREENHOUSE) != 0xFF;
+    uint8_t k, n = 0, map[NUM_CROPS], r, q, max, green = 0, rar;
+    for (k = 0; k < MAX_BLD; k++)   // only a repaired greenhouse grows out-of-season seeds
+        if (G.bld[k].type == B_GREENHOUSE && !(G.bld[k].flags & BF_RUIN)) green = 1;
+    uint16_t cost;
+    refresh();
+    rar = ui_menu(0, 0, 12, tier_items, NUM_RARITY, 0);   // "Legend x8" + cursor + borders
+    if (rar == 0xFF) return;
+    if (rar == R_LEGEND && !legend_ok()) { legend_locked(); return; }
     for (k = 1; k <= NUM_CROPS && n < 10; k++) {
         if (crops[k].season != G.season && !green) continue;
-        s_clr(); s_ch((char)(0x80 + k - 1)); s_add(items[k - 1].name); s_add(" seed"); s_pad(14); s_num(crops[k].seed_cost, 3);
+        s_clr(); s_ch((char)(0x80 + k - 1)); s_add(items[k - 1].name);
+        if (rar) s_ch(rar == R_RARE ? '+' : (char)0xF1); else s_add(" seed");
+        s_pad(14); s_num(crops[k].seed_cost * rar_mult[rar], 3);
         lbl_set(n); map[n++] = k;
     }
     if (!n) { ui_dialog("No seeds this season, sorry!"); return; }
@@ -68,40 +86,60 @@ static void buy_seeds(void) {
         refresh();
         ui_hover = &hv;
         while (1) {
-            crop_panel(map[hv]);
+            crop_panel_r(map[hv], rar);
             r = ui_menu(0, 0, 20, lp, n, hv);
             if (r != 0xFE) break;
         }
         ui_hover = 0;
         if (r == 0xFF) return;
         k = map[r];
-        afford = G.gold / crops[k].seed_cost;
+        cost = crops[k].seed_cost * rar_mult[rar];
+        afford = G.gold / cost;
         max = afford > 99 ? 99 : (uint8_t)afford;
         if (!max) { ui_dialog("You can't afford that right now."); continue; }
-        q = ui_quantity(max, crops[k].seed_cost);
+        q = ui_quantity(max, cost);
         if (!q) continue;
-        G.gold -= (uint32_t)q * crops[k].seed_cost;
-        G.seeds[k] += q;
+        G.gold -= (uint32_t)q * cost;
+        G.seeds[k][rar] = (uint16_t)G.seeds[k][rar] + q > 255 ? 255 : G.seeds[k][rar] + q;
         hud_draw();
     }
 }
 
 static uint8_t animal_count(uint8_t kind, uint8_t *home) {
-    uint8_t k, b, cap = kind == A_COW ? 4 : 6, n;
+    uint8_t k, b, cap = kind == A_HEN ? 6 : BARN_CAP, n;   // cows and sheep share the barn
     for (b = 0; b < MAX_BLD; b++) {
-        if (G.bld[b].type != (kind == A_COW ? B_BARN : B_COOP) || (G.bld[b].flags & BF_RUIN)) continue;
+        if (G.bld[b].type != (kind == A_HEN ? B_COOP : B_BARN) || (G.bld[b].flags & BF_RUIN)) continue;
         n = 0;
-        for (k = 0; k < MAX_ANIMALS; k++) if (G.anim[k].kind == kind && G.anim[k].home == b) n++;
+        for (k = 0; k < MAX_ANIMALS; k++) if (G.anim[k].kind != 0xFF && G.anim[k].home == b) n++;
         if (n < cap) { *home = b; return 1; }
     }
     return 0;
 }
 
+static const uint16_t breed_price[3][NUM_RARITY] = {{1500, 4500, 12000}, {400, 1200, 3200}, {1800, 5400, 14400}};
+static const char *const breed_names[3][NUM_RARITY] = {{"Holstein", "Jersey", "Golden"}, {"White", "Brown", "Golden"}, {"Merino", "Cocoa", "Golden"}};
+static const char *const breed_pet[3][NUM_RARITY] = {{"Daisy", "Mocha", "Goldy"}, {"Penny", "Hazel", "Sunny"}, {"Wooly", "Cocoa", "Midas"}};
+static const char *const breed_tip[3][2] = {
+    {"Jersey cows give two milk a day!", "A golden cow! Two gold-star milk a day, always top quality."},
+    {"Brown hens lay two eggs a day!", "A golden hen! Two golden eggs a day, always top quality."},
+    {"Cocoa sheep grow a double fleece!", "Golden fleece! Two gold-star wool every shearing."}};
+static const char *const kind_word[3] = {"cow", "hen", "sheep"};
+
 static void buy_animal(uint8_t kind) {
-    uint8_t home, k;
-    uint16_t price = kind == A_COW ? 1500 : 400;
+    uint8_t home, k, br, ki = kind;
+    uint16_t price;
+    for (k = 0; k < NUM_RARITY; k++) {
+        s_clr(); s_add(breed_names[ki][k]); s_pad(10); s_num(breed_price[ki][k], 5);
+        lbl_set(k);
+    }
+    refresh();
+    br = ui_menu(0, 0, 20, lp, NUM_RARITY, 0);
+    if (br == 0xFF) return;
+    if (br == R_LEGEND && !legend_ok()) { legend_locked(); return; }
+    if (br) ui_dialog(breed_tip[ki][br - 1]);
+    price = breed_price[ki][br];
     if (!animal_count(kind, &home)) {
-        ui_dialog(kind == A_COW ? "You need a barn with room first. Fix up the old one or build a new barn!" :
+        ui_dialog(kind != A_HEN ? "You need a barn with room first. Fix up the old one or build a new barn!" :
                                   "You need a coop with room first. Fix up the old one or build a new coop!");
         return;
     }
@@ -109,31 +147,31 @@ static void buy_animal(uint8_t kind) {
     for (k = 0; k < MAX_ANIMALS; k++) if (G.anim[k].kind == 0xFF) break;
     if (k == MAX_ANIMALS) { ui_dialog("That's as many animals as you can care for!"); return; }
     G.gold -= price;
-    G.anim[k].kind = kind; G.anim[k].home = home; G.anim[k].happy = 100; G.anim[k].age = 0; G.anim[k].flags = 0;
-    strcpy(G.anim[k].name, kind == A_COW ? "Daisy" : "Penny");
+    G.anim[k].kind = kind; G.anim[k].home = home; G.anim[k].happy = 100; G.anim[k].age = ADULT_AGE; G.anim[k].flags = br << 6;
+    strcpy(G.anim[k].name, breed_pet[ki][br]);
     ui_end();
-    s_clr(); s_add(kind == A_COW ? "Name your cow" : "Name your hen");
+    s_clr(); s_add("Name your "); s_add(kind_word[ki]);   // prompt via sbuf: ui_name lives in another bank
     ui_name(sbuf, G.anim[k].name, 5);
     ui_begin();
-    s_clr(); s_add(G.anim[k].name); s_add(" will be waiting at your "); s_add(kind == A_COW ? "barn" : "coop"); s_add(". Feed them hay every day!");
+    s_clr(); s_add(G.anim[k].name); s_add(" will be waiting at your "); s_add(kind != A_HEN ? "barn" : "coop"); s_add(". Feed them hay every day!");
     ui_dialog(sbuf);
     hud_draw();
     goals_check();
 }
 
-static const char *const store_items[7] = {"Seeds", "Fertilizer", "Hay", "Cow  1500", "Hen   400", "Sell", "Bye"};
+static const char *const store_items[8] = {"Seeds", "Fertilizer", "Hay", "Cows", "Hens", "Sheep", "Sell", "Bye"};
 static void store(void) {
     uint8_t r, q;
-    ui_speaker = "Rosa";
+    set_speaker("Rosa");
     say("Welcome to the General Store! Seeds for every season, and I'll buy whatever you grow.");
     while (1) {
         ui_begin(); ui_money();
-        r = ui_menu(0, 0, 11, store_items, 7, 0);
+        r = ui_menu(0, 0, 13, store_items, 8, 0);
         switch (r) {
         case 0: buy_seeds(); break;
         case 1:
             q = ui_quantity(G.gold / 50 > 99 ? 99 : (uint8_t)(G.gold / 50), 50);
-            if (q) { G.gold -= (uint32_t)q * 50; G.fert += q; hud_draw(); ui_dialog("Fertilizer makes for better quality crops. Use it on tilled soil."); }
+            if (q) { G.gold -= (uint32_t)q * 50; G.fert += q; hud_draw(); refresh(); ui_dialog("Fertilizer makes for better quality crops. Use it on tilled soil."); }
             break;
         case 2:
             q = ui_quantity(G.gold / 20 > 99 ? 99 : (uint8_t)(G.gold / 20), 20);
@@ -141,7 +179,8 @@ static void store(void) {
             break;
         case 3: buy_animal(A_COW); break;
         case 4: buy_animal(A_HEN); break;
-        case 5: sell_filter = 0; sell_menu(); break;
+        case 5: buy_animal(A_SHEEP); break;
+        case 6: sell_filter = 0; sell_menu(); break;
         default: ui_dialog("Come back soon!"); ui_end(); ui_speaker = 0; return;
         }
         ui_end();
@@ -149,14 +188,14 @@ static void store(void) {
 }
 
 // ---------------------------------------------------------------- blacksmith (Brick)
-static const char *const tt_names[NUM_TT] = {"Hoe", "Watering Can", "Axe", "Hammer", "Fishing Rod"};
+static const char *const tt_names[NUM_TT] = {"Hoe", "Water Can", "Axe", "Hammer", "Fishing Rod"};   // fit the price list
 static const char *const tier_word[4] = {"Basic", "Copper", "Iron", "Gold"};
 static const uint16_t tier_gold[3] = {2000, 5000, 12000};
 
 static void smith(void) {
     static const char *const sm[3] = {"Upgrade", "Sell Ore", "Bye"};
     uint8_t r, k, t, up = 0xFF;
-    ui_speaker = "Brick";
+    set_speaker("Brick");
     say("Brick's Forge. Bring me ore and coin and I'll make your tools sing.");
     while (1) {
         ui_begin(); ui_money();
@@ -164,20 +203,22 @@ static void smith(void) {
         if (r == 0) {
             for (k = 0; k < NUM_TT; k++) {
                 t = G.tier[k];
-                s_clr(); s_add(tt_names[k]); s_pad(12);
-                if (t >= 3) s_add("MAX");
-                else { s_ch('G'); s_num(tier_gold[t], 0); }
+                s_clr(); s_add(tt_names[k]); s_pad(12);   // prices right-aligned in the 17 columns, like every shop list
+                if (t >= 3) s_add("  MAX");
+                else s_num(tier_gold[t], 5);
                 lbl_set(k);
             }
             refresh();
             r = ui_menu(0, 0, 20, lp, NUM_TT, 0);
             if (r != 0xFF) {
+                refresh();   // clear the list: the speaker's name tab would sit on its bottom row
                 t = G.tier[r];
                 if (t >= 3) ui_dialog("That one's as good as it gets!");
                 else {
                     uint8_t ore = I_COPPER + t;
                     s_clr(); s_add("Make it "); s_add(tier_word[t + 1]); s_add("?\nG"); s_num(tier_gold[t], 0); s_add(" + 5 "); s_add(items[ore].name);
                     if (ui_yesno(sbuf)) {
+                        refresh();   // drop the YES/NO box before Brick answers
                         if (G.gold < tier_gold[t] || inv_count(ore) < 5) ui_dialog("You'll need more than that. Ore comes from the quarry and the hollow.");
                         else {
                             G.gold -= tier_gold[t]; inv_take(ore, 5); G.tier[r]++;
@@ -212,18 +253,19 @@ static void carpenter(void) {
     static const char *const cm[5] = {"House", "Styles", "Materials", "Advice", "Bye"};
     uint8_t r, h = bld_find(B_HOUSE), lv, k, q;
     const char *toast = 0;
-    ui_speaker = "June";
+    set_speaker("June");
     say("June's Carpentry! Houses, renovations, lumber. What are we building?");
     while (1) {
         ui_begin(); ui_money();
         r = ui_menu(0, 0, 12, cm, 5, 0);
+        refresh();   // the prompts and replies below get a clean screen (the name tab sat on the menu)
         lv = (G.bld[h].flags & BF_LVL) >> 1;
         if (r == 0) {
             if (lv >= 2) ui_dialog("Your house is as big as it gets. It's a beauty!");
             else {
                 uint32_t g = lv ? 8000 : 2500; uint16_t w = lv ? 120 : 60, s = lv ? 80 : 0;
                 s_clr(); s_add(lv ? "Grow into a big two-storey home?\n" : "Rebuild the shack into a real house?\n"); cost_str(g, w, s);
-                if (ui_yesno(sbuf) && pay(g, w, s)) {
+                if (ui_yesno(sbuf) && (refresh(), pay(g, w, s))) {   // refresh: no YES/NO box left behind the reply
                     G.bld[h].flags = (G.bld[h].flags & ~BF_LVL) | ((lv + 1) << 1);
                     G.energy_max += 30;
                     music_play(MUS_JINGLE_FANFARE);
@@ -251,7 +293,7 @@ static void carpenter(void) {
                         "A thatched storybook cottage with roses, and a stone barn."};
                     ui_dialog(desc[r]);
                     s_clr(); s_add("Renovate in "); s_add(style_names_[r]); s_add(" style for G"); s_num(style_gold[r], 0); s_ch('?');
-                    if (ui_yesno(sbuf) && pay(style_gold[r], 0, 0)) {
+                    if (ui_yesno(sbuf) && (refresh(), pay(style_gold[r], 0, 0))) {
                         G.style = r;
                         music_play(MUS_JINGLE_FANFARE);
                         toast = "\xF0 Fresh new look \xF0";
@@ -263,7 +305,7 @@ static void carpenter(void) {
         } else if (r == 2) {
             static const char *const mm[2] = {"Wood    10", "Stone   15"};
             refresh();
-            r = ui_menu(0, 0, 14, mm, 2, 0);
+            r = ui_menu(0, 0, 13, mm, 2, 0);   // clear of the money box at x 13
             if (r != 0xFF) {
                 uint16_t price = r ? 15 : 10;
                 q = ui_quantity(G.gold / price > 99 ? 99 : (uint8_t)(G.gold / price), price);
@@ -287,11 +329,12 @@ static void cafe(void) {
     static const uint16_t price[3] = {150, 350, 800};
     static const uint8_t energy[3] = {20, 50, 255};
     uint8_t r;
-    ui_speaker = "Ada";
+    set_speaker("Ada");
     say("Welcome to Ada's! Sit down, you look like you've been pulling weeds all day.");
     while (1) {
         ui_begin(); ui_money();
-        r = ui_menu(0, 4, 14, fm, 4, 0);
+        r = ui_menu(0, 4, 15, fm, 4, 0);   // 12-column labels + cursor + borders
+        refresh();   // Ada's name tab would cover "Bye" while she answers
         if (r < 3) {
             if (G.gold < price[r]) ui_dialog("Maybe next time, hon.");
             else {
@@ -310,10 +353,14 @@ static void cafe(void) {
 // ---------------------------------------------------------------- land office
 static void realtor(void) {
     uint8_t p, n = 0, map[16], r;
-    ui_speaker = "Land Office";
+    set_speaker("Land Office");
     for (p = 0; p < 16 && n < 12; p++) {
         if (G.plots & ((uint16_t)1 << p)) continue;
-        s_clr(); plot_name_add(p); s_pad(13); s_num(plot_price(p), 5);
+        uint8_t i, len;   // name (clipped) + price must fit the 17 columns inside the box
+        s_clr(); s_num(plot_price(p), 0); len = s_len(); strcpy(lbl[13], sbuf);
+        s_clr(); plot_name_add(p); strcpy(lbl[12], sbuf);
+        s_clr(); for (i = 0; i < 16 - len && lbl[12][i]; i++) s_ch(lbl[12][i]);
+        s_pad(17 - len); s_add(lbl[13]);
         lbl_set(n); map[n++] = p;
     }
     if (!n) { say("You own every acre around! What a farm."); ui_speaker = 0; return; }
@@ -360,7 +407,7 @@ static uint8_t loves(uint8_t npc, uint8_t it) {
 
 void npc_talk(uint8_t npc) BANKED {
     uint8_t h = G.friend[npc] / 50, it;
-    ui_speaker = npc_names[npc];
+    set_speaker(npc_names[npc]);
     if (!(G.talked & (1 << npc))) {
         G.talked |= 1 << npc;
         if (G.friend[npc] < 253) G.friend[npc] += 2;
@@ -387,8 +434,12 @@ void town_act(uint8_t act) BANKED {
     case ACT_CARPENTER: carpenter(); break;
     case ACT_CAFE: cafe(); break;
     case ACT_REALTOR: realtor(); break;
-    case ACT_HALL: hall_act(); break;
+    case ACT_HALL: if (staff_hall()) hall_act(); break;
     case ACT_BOARD: board_act(); break;
+    case ACT_BAKERY: biz_act(0); break;
+    case ACT_JUICEBAR: biz_act(1); break;
+    case ACT_CREAMERY: biz_act(2); break;
+    case ACT_FLORIST: biz_act(3); break;
     case ACT_FOUNTAIN:
         if (G.gold >= 10 && ui_yesno("Toss a coin in the fountain and make a wish? (G10)")) {
             G.gold -= 10;

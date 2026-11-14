@@ -2,6 +2,7 @@
 #pragma bank 255
 #include <gb/gb.h>
 #include <string.h>
+#include <stddef.h>
 #include "game.h"
 
 BANKREF(save_write)
@@ -9,10 +10,33 @@ BANKREF(save_write)
 uint8_t save_slot;
 #define SLOT(s) ((uint8_t *)(0xA000 + ((uint16_t)(s) << 12)))
 
-static uint16_t sum(const uint8_t *p, uint16_t n) {
-    uint16_t s = 0x1234;
-    while (n--) s = (s << 1 | s >> 15) + *p++;
-    return s;
+// s = rotl1(s) + byte over the whole state. SDCC's C loop spent ~40 cycles a byte (4.4KB: ~5 frames
+// at every save); this is 16. sdcccall(1): p in DE, n in BC, result in BC.
+static uint16_t sum(const uint8_t *p, uint16_t n) __naked {
+    (void)p; (void)n;
+    __asm
+        ld   hl, #0x1234
+    10$:
+        ld   a, c
+        or   a, b
+        jr   z, 13$
+        dec  bc
+        add  hl, hl             ; s << 1, old bit 15 -> carry
+        jr   nc, 11$
+        inc  l                  ; ... rotated into bit 0
+    11$:
+        ld   a, (de)
+        inc  de
+        add  a, l
+        ld   l, a
+        jr   nc, 10$
+        inc  h
+        jr   10$
+    13$:
+        ld   c, l
+        ld   b, h
+        ret
+    __endasm;
 }
 
 void save_write(void) BANKED {
@@ -32,8 +56,12 @@ static uint8_t v2_ok(const uint8_t *p) {
            (p[V2_SIZE - 2] | (p[V2_SIZE - 1] << 8)) == sum(p, V2_SIZE - 2);
 }
 
-// v3 = the current layout minus the v4 furniture fields appended before the checksum
-#define V3_SIZE (sizeof(GameState) - 1 - MAX_FURN * 3)
+// v3 = the current layout up to rng_hi, except inv had 39 items (no wool) and seeds had no rarity;
+// everything from furn_init on was appended later. v3 ended with the checksum right after rng.
+#define V3_INV (39 * 3)
+#define V3_SEEDS (NUM_CROPS + 1)
+#define V3_TAIL (offsetof(GameState, furn_init) - offsetof(GameState, saplings))
+#define V3_SIZE (offsetof(GameState, inv) + V3_INV + V3_SEEDS + V3_TAIL + 2)
 static uint8_t v3_ok(const uint8_t *p) {
     return p[2] == 3 && (p[V3_SIZE - 2] | (p[V3_SIZE - 1] << 8)) == sum(p, V3_SIZE - 2);
 }
@@ -70,7 +98,7 @@ static void migrate_v2(const uint8_t *p) {
     G.day = p[785]; G.season = p[786] & 3; G.year = p[787];
     G.energy_max = p[789]; G.energy = G.energy_max;
     for (k = 0; k < 11; k++) { uint16_t n = rd16(p + 807 + k * 2); G.inv[inv_map[k]][0] = n > 255 ? 255 : n; }
-    for (k = 1; k < 8; k++) G.seeds[seed_map[k]] = p[829 + k];
+    for (k = 1; k < 8; k++) G.seeds[seed_map[k]][R_COMMON] = p[829 + k];
     G.wood = rd16(p + 837); G.stone = rd16(p + 839); G.style = p[841] & 3;
     if (up & 1) G.tier[TT_CAN] = 1;
     if (up & 2) G.tier[TT_HOE] = 1;
@@ -94,10 +122,13 @@ uint8_t save_load(uint8_t slot) BANKED {
     uint8_t v;
     ENABLE_RAM; SWITCH_RAM(0);
     v = check(slot);
-    if (v == 3 && SLOT(slot)[2] == 3) {   // v3: same layout up to the new furniture fields
-        memcpy(&G, SLOT(slot), V3_SIZE - 2);
-        G.furn_init = 0;
-        memset(G.furn, 0, sizeof(G.furn));
+    if (v == 3 && SLOT(slot)[2] == 3) {   // v3: carry it forward field block by field block
+        const uint8_t *p = SLOT(slot) + offsetof(GameState, inv) + V3_INV;
+        memset(&G, 0, sizeof(G));          // no wool, furniture, staff or businesses yet
+        memcpy(&G, SLOT(slot), offsetof(GameState, inv) + V3_INV);
+        for (v = 0; v < V3_SEEDS; v++) G.seeds[v][R_COMMON] = p[v];
+        memcpy(G.saplings, p + V3_SEEDS, V3_TAIL);
+        v = 3;
         G.version = SAVE_VERSION;
         if (G.scene != SCENE_FARM) G.scene = MAP_TOWN;   // the only v3 map you could save in
     } else if (v == 3) memcpy(&G, SLOT(slot), sizeof(G));

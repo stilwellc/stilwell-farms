@@ -12,24 +12,35 @@ static uint8_t slen;
 static uint8_t ui_depth;
 const char *ui_speaker;
 uint8_t *ui_hover;
-static uint8_t rowbuf[20], attrbuf[20];
 
 void s_clr(void) { slen = 0; sbuf[0] = 0; }
 uint8_t s_len(void) { return slen; }
 void s_pad(uint8_t col) { while (slen < col) s_ch(' '); }
 void s_ch(char c) { if (slen < 95) { sbuf[slen++] = c; sbuf[slen] = 0; } }
 void s_add(const char *s) { while (*s) s_ch(*s++); }
+// digits by subtracting powers of ten: the old v % 10, v /= 10 was two 32-bit library divides per
+// digit (~a third of a frame for a 7-digit gold amount on every menu/HUD redraw)
+static const uint32_t pow10[9] = {1000000000UL, 100000000UL, 10000000UL, 1000000UL, 100000UL, 10000UL, 1000UL, 100UL, 10UL};
 void s_num(uint32_t v, uint8_t width) {
     char tmp[10];
-    uint8_t n = 0;
-    do { tmp[n++] = '0' + (uint8_t)(v % 10); v /= 10; } while (v && n < 10);
+    uint8_t n = 0, k;
+    for (k = 0; k < 9; k++) {
+        uint8_t d = 0;
+        while (v >= pow10[k]) { v -= pow10[k]; d++; }
+        if (d || n) tmp[n++] = '0' + d;
+    }
+    tmp[n++] = '0' + (uint8_t)v;
     while (width > n) { s_ch(' '); width--; }
-    while (n) s_ch(tmp[--n]);
+    for (k = 0; k < n; k++) s_ch(tmp[k]);
 }
 
+// straight into the window map (0x9C00): attr + tile in one STAT wait (VRAM stays writable through
+// mode 2, and the VBL interrupt returns inside VBlank) instead of two set_win_tile_xy calls
 void ui_char(uint8_t x, uint8_t y, uint8_t tile) {
-    VBK_REG = 1; set_win_tile_xy(x, y, GL_ATTR);
-    VBK_REG = 0; set_win_tile_xy(x, y, tile);
+    volatile uint8_t *p = (volatile uint8_t *)(0x9C00 + ((uint16_t)y << 5) + x);
+    while (STAT_REG & STATF_BUSY);
+    VBK_REG = 1; *p = GL_ATTR;
+    VBK_REG = 0; *p = tile;
 }
 
 void ui_text(uint8_t x, uint8_t y, const char *s) {
@@ -64,7 +75,7 @@ void ui_box(uint8_t x, uint8_t y, uint8_t w, uint8_t h) {
     }
 }
 
-// title tab in a box's top border:  ┤ TITLE ├
+// title tab in a box's top border:  ┤ TITLE ├  (bank 0: callers in any bank pass literals)
 void ui_title(uint8_t x, uint8_t y, const char *t) {
     ui_char(x, y, GL_HDR_L);
     ui_char(x + 1, y, GL_FILL);
@@ -75,16 +86,8 @@ void ui_title(uint8_t x, uint8_t y, const char *t) {
 
 // Copy what's on screen into the window so boxes can be drawn over it.
 void ui_begin(void) {
-    uint8_t y, bx = scx >> 3, by = scy >> 3;
     if (ui_depth++) return;
-    (void)bx; (void)by;
-    for (y = 0; y < 17; y++) {
-        bg_copy_row(y, rowbuf, attrbuf);
-        VBK_REG = 1;
-        set_win_tiles(0, y, 20, 1, attrbuf);
-        VBK_REG = 0;
-        set_win_tiles(0, y, 20, 1, rowbuf);
-    }
+    bg_to_win();
     // HUD row moves from window row 0 to row 17
     if (scene != MAP_TITLE) hud_draw_row(17);
     move_win(7, 0);
@@ -115,20 +118,30 @@ static const char *const pnames[7] = {"Grandpa", "Rosa", "Brick", "June", "Ada",
 static const mt_t pmts[7] = {ST_PORTRAIT_GRANDPA, ST_PORTRAIT_ROSA, ST_PORTRAIT_BRICK, ST_PORTRAIT_JUNE,
                              ST_PORTRAIT_ADA, ST_PORTRAIT_HOLLIS, ST_PORTRAIT_MILO};
 
+// ui_speaker is read by bank-0 dialog code while whatever bank called say() is mapped, so banked
+// callers hand their name over in a RAM copy (a pointer into their own bank read as garbage / hung)
+static char spk_buf[14];
+void set_speaker(const char *s) {
+    uint8_t i = 0;
+    while (s[i] && i < 13) { spk_buf[i] = s[i]; i++; }
+    spk_buf[i] = 0;
+    ui_speaker = spk_buf;
+}
+
 static uint8_t streq(const char *a, const char *b) {
     while (*a && *a == *b) { a++; b++; }
     return *a == *b;
 }
 
 static void dialog_print(const char *s, uint8_t wait_end) {
-    uint8_t line = 0, col = 0, len, i, ticks = 0, x0 = 1, tw = 18;
+    uint8_t line = 0, col = 0, len, i, ticks = 0, x0 = 1, tw = 17;   // col 18 stays free for the more-arrow
     const char *w;
     ui_box(0, 12, 20, 6);
     if (ui_speaker) {
         for (i = 0; i < 7; i++)
             if (streq(ui_speaker, pnames[i])) {
                 ui_put_struct(1, 13, pmts[i], 2, 2);
-                x0 = 6; tw = 13;
+                x0 = 6; tw = 12;
                 break;
             }
     }
@@ -230,7 +243,7 @@ uint8_t ui_yesno(const char *q) {
     q = hold(q);
     ui_begin();
     dialog_print(q, 0);
-    r = ui_menu(14, 7, 6, yesno, 2, 0);
+    r = ui_menu(14, 5, 6, yesno, 2, 0);   // above the name tab (rows 10-12)
     ui_end();
     return r == 0;
 }

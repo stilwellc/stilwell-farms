@@ -1283,6 +1283,47 @@ glyph HUD_WINTER
 33333333
 33333333
 
+# HUD weather: drawn left-aligned in 6px on the bar's ink so the clock digits after them keep a gap
+glyph HUD_SUN
+33333333
+o3333o33
+33oo3333
+3oooo333
+3oooo333
+33oo3333
+o3333o33
+33333333
+
+glyph HUD_RAIN
+33333333
+33..3333
+3.....33
+......33
+33333333
+23232333
+32323333
+33333333
+
+glyph HUD_SNOW
+33333333
+.3.3.333
+3...3333
+.....333
+3...3333
+.3.3.333
+33333333
+33333333
+
+glyph HUD_MOON
+33333333
+33ooo333
+3oo33333
+oo333333
+oo333333
+3oo33333
+33ooo333
+33333333
+
 glyph HUD_COIN
 33333333
 33oooo33

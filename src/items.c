@@ -14,7 +14,15 @@ const ItemDef items[NUM_ITEMS] = {
     {"Minnow", 15}, {"Bass", 70}, {"Trout", 100}, {"Catfish", 120}, {"Carp", 45}, {"Gold Koi", 600},
     {"Copper", 40}, {"Iron", 90}, {"Gold Ore", 200}, {"Gem", 400},
     {"Juice", 150}, {"Cider", 170}, {"Cheese", 240}, {"Jam", 140}, {"Pickles", 120},
+    {"Wool", 340},
 };
+
+// bank 0: callers pass their own string literals
+void flash_gain(const char *what, uint8_t n) {
+    sfx(SFX_COIN);
+    s_clr(); s_ch('+'); s_num(n, 0); s_ch(' '); s_add(what);
+    hud_flash(sbuf);
+}
 
 // crop id c (1..14) harvests item c-1
 const CropDef crops[NUM_CROPS + 1] = {
@@ -44,5 +52,6 @@ const uint8_t item_icon_tile[NUM_ITEMS] = {
     GL_IT_FISH, GL_IT_FISH, GL_IT_FISH, GL_IT_FISH, GL_IT_FISH, GL_IT_FISH,
     GL_IT_ORE, GL_IT_ORE, GL_IT_ORE, GL_IT_GEM,
     GL_IT_JUICE, GL_IT_JUICE, GL_IT_CHEESE, GL_IT_JAM, GL_IT_JAM,
+    GL_IT_EGG,   // wool: a fluffy white ball
 };
 

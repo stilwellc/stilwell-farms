@@ -43,7 +43,7 @@ static mt_t item_art(uint8_t it) {
 static const char *item_kind(uint8_t it) {
     if (it < NUM_CROPS) return "Crop";
     if (it <= I_CHERRY) return "Fruit";
-    if (it <= I_HONEY) return "Animal good";
+    if (it <= I_HONEY || it == I_WOOL) return "Animal good";
     if (it <= I_HERB) return "Forage";
     if (it <= I_KOI) return "Fish";
     if (it <= I_GEM) return "Ore - for tools";
@@ -67,15 +67,23 @@ void item_panel(uint8_t it, uint8_t q) BANKED {
     ui_text(4, 15, sbuf);
 }
 
-void crop_panel(uint8_t c) BANKED {
+void crop_panel(uint8_t c) BANKED { crop_panel_r(c, R_COMMON); }
+
+// rare / legendary packets trade the price line for what makes them special
+void crop_panel_r(uint8_t c, uint8_t rar) BANKED {
     ui_panel(0, 12, 20, 5);
     ui_put_mt(1, 13, crops[c].ripe_mt);
-    s_clr(); s_add(items[c - 1].name); s_add(" - "); s_add(season_name[crops[c].season]);
+    s_clr(); s_add(items[c - 1].name);
+    if (rar) { s_ch(rar == R_RARE ? '+' : (char)0xF1); s_add(rar == R_RARE ? " Rare" : " Legend"); }
+    else { s_add(" - "); s_add(season_name[crops[c].season]); }
     ui_text(4, 13, sbuf);
     s_clr(); s_add("Ripe in "); s_num(crops[c].days, 0); s_add(" days");
     if (crops[c].regrow) { s_add(", +"); s_num(crops[c].regrow, 0); }
     ui_text(4, 14, sbuf);
-    s_clr(); s_add("Sells G"); s_num(items[c - 1].price, 0); s_add(" (gold G"); s_num(item_value(c - 1, 2), 0); s_ch(')');
+    s_clr();
+    if (rar == R_RARE) s_add("x2 per harvest");
+    else if (rar == R_LEGEND) { s_add("x3-4, top"); s_ch((char)0xF1); s_add(" odds"); }
+    else { s_add("Sell G"); s_num(items[c - 1].price, 0); s_add(" \xF1G"); s_num(item_value(c - 1, 2), 0); }
     ui_text(4, 15, sbuf);
 }
 
@@ -164,6 +172,7 @@ static void map_tile(uint8_t tx, uint8_t ty, uint8_t k) {
 void map_page(void) BANKED {
     uint8_t tx, ty, plot = PLOT_OF(G.px, G.py), t = 0, h = bld_find(B_HOUSE), last = 0xFF;
     if (scene != SCENE_FARM) plot = 13;
+    hide_sprites();   // the minimap tiles have no BG priority: keep the player/actors off it
     for (ty = 0; ty < 16; ty++)
         for (tx = 0; tx < 16; tx++) map_tile(tx, ty, classify(tx * 2, ty * 2));
     for (ty = 0; ty < 17; ty++) { ui_char(0, ty, GL_FILL); ui_char(1, ty, GL_FILL); ui_char(18, ty, GL_FILL); ui_char(19, ty, GL_FILL); }

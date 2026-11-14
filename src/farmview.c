@@ -5,7 +5,27 @@
 BANKREF(world_cell_mt)
 #include "decor.h"
 
-mt_t water_tile(uint8_t x, uint8_t y);  // view.c (bank 0)
+static uint8_t is_water(int8_t x, int8_t y) {
+    if (x < 0 || y < 0 || x >= WW || y >= WH) return 1;
+    {
+        uint16_t i = WIDX(x, y);
+        uint8_t c = G.cell[i];
+        return c == C_WATER || (c == C_DECOR && G.a1[i] == DK_BRIDGE);  // bridges count
+    }
+}
+
+static const mt_t water_mt[16] = {
+    MT_WATER_0, MT_WATER_1, MT_WATER_2, MT_WATER_3, MT_WATER_4, MT_WATER_5, MT_WATER_6, MT_WATER_7,
+    MT_WATER_8, MT_WATER_9, MT_WATER_10, MT_WATER_11, MT_WATER_12, MT_WATER_13, MT_WATER_14, MT_WATER_15};
+
+static mt_t water_tile(uint8_t x, uint8_t y) {
+    uint8_t m = 0;
+    if (is_water(x, (int8_t)y - 1)) m |= 1;
+    if (is_water(x + 1, y)) m |= 2;
+    if (is_water(x, y + 1)) m |= 4;
+    if (is_water((int8_t)x - 1, y)) m |= 8;
+    return water_mt[m];
+}
 
 static const mt_t style_h1[4] = {ST_CLASSIC_HOUSE1, ST_MODERN_HOUSE1, ST_CABIN_HOUSE1, ST_COTTAGE_HOUSE1};
 static const mt_t style_h2[4] = {ST_CLASSIC_HOUSE2, ST_MODERN_HOUSE2, ST_CABIN_HOUSE2, ST_COTTAGE_HOUSE2};
@@ -70,7 +90,7 @@ mt_t world_cell_mt(uint8_t x, uint8_t y) BANKED {
     case C_ORE: return ore_mt[a & 3];
     case C_WATER: return water_tile(x, y);
     case C_SOIL: {
-        uint8_t c = a & SOIL_CROP, wet = a & SOIL_WET, g = G.a2[i], d;
+        uint8_t c = a & SOIL_CROP, wet = a & SOIL_WET, g = SOIL_GROWN(i), d;
         if (!c) return wet ? MT_TILLED_WET : MT_TILLED_DRY;
         if (c == CROP_WITHERED) return MT_WITHERED;
         d = crops[c].days;
@@ -82,7 +102,7 @@ mt_t world_cell_mt(uint8_t x, uint8_t y) BANKED {
     case C_TREE: {
         uint8_t kind = a >> 5;
         if (G.a2[i] < 10) return MT_SAPLING;
-        if ((a & 31) >= 4 && season_ok_tree(kind)) return ripe_tree[kind];
+        if ((a & 31) >= TREE_RIPE_DAYS && season_ok_tree(kind)) return ripe_tree[kind];
         return kind == 3 ? MT_CHERRY_TREE : MT_FRUIT_TREE;
     }
     case C_GIANT: return ST_GIANT_PUMPKIN + (a & 3);

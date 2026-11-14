@@ -11,8 +11,11 @@ static const char keys[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz
 #define KCOLS 9
 
 static void draw_name(const char *buf, uint8_t maxlen) {
-    uint8_t i;
-    for (i = 0; i < maxlen; i++) ui_char(5 + i, 3, buf[i] ? font_map[buf[i] - 32] : font_map['_' - 32 < 0 ? 0 : '-' - 32]);
+    uint8_t i, end = 0;
+    for (i = 0; i < maxlen; i++) {   // nothing past the terminator: tmp[] beyond it is stale stack
+        if (!buf[i]) end = 1;
+        ui_char(5 + i, 3, end ? font_map['-' - 32] : font_map[buf[i] - 32]);
+    }
 }
 
 uint8_t ui_name(const char *prompt, char *buf, uint8_t maxlen) BANKED {
@@ -20,7 +23,7 @@ uint8_t ui_name(const char *prompt, char *buf, uint8_t maxlen) BANKED {
     char tmp[10];
     strcpy(tmp, buf);
     ui_begin();
-    ui_box(0, 0, 20, 17);
+    ui_box(0, 0, 20, 18);   // full height: covers the HUD row (17) while the keyboard is up
     ui_text(2, 1, prompt);
     for (k = 0; k < NKEYS + 2; k++) {
         uint8_t x = 2 + (k % KCOLS) * 2, y = 6 + k / KCOLS;
@@ -83,11 +86,15 @@ void ui_panel(uint8_t x, uint8_t y, uint8_t w, uint8_t h) BANKED {
     }
 }
 
-// the shop money box, top right
+// the shop money box, top right: coin + 4 columns inside the border, like the HUD (9999, then 10k..999k);
+// x 13..19 leaves 13 columns for the shop menus beside it
 void ui_money(void) BANKED {
-    ui_box(11, 0, 9, 3);
-    ui_char(12, 1, GL_COIN);
-    s_clr(); s_num(G.gold > 9999999 ? 9999999 : G.gold, 7);
-    ui_text(13, 1, sbuf);
+    uint32_t g = G.gold;
+    ui_box(13, 0, 7, 3);
+    ui_char(14, 1, GL_COIN);
+    s_clr();
+    if (g < 10000) s_num(g, 4);
+    else { g /= 1000; s_num(g > 999 ? 999 : g, 3); s_ch('k'); }
+    ui_text(15, 1, sbuf);
 }
 
