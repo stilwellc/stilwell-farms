@@ -1,0 +1,25 @@
+// Style slots: a style without art yet falls back to Classic.
+#ifndef STYLES_H
+#define STYLES_H
+#define NSTYLE 4
+#ifndef ST_MODERN_HOUSE1
+#define ST_MODERN_HOUSE1 ST_CLASSIC_HOUSE1
+#define ST_MODERN_HOUSE2 ST_CLASSIC_HOUSE2
+#define ST_MODERN_BARN ST_CLASSIC_BARN
+#define STYLE_MODERN STYLE_CLASSIC
+#endif
+#ifndef ST_CABIN_HOUSE1
+#define ST_CABIN_HOUSE1 ST_CLASSIC_HOUSE1
+#define ST_CABIN_HOUSE2 ST_CLASSIC_HOUSE2
+#define ST_CABIN_BARN ST_CLASSIC_BARN
+#define STYLE_CABIN STYLE_CLASSIC
+#endif
+#ifndef ST_COTTAGE_HOUSE1
+#define ST_COTTAGE_HOUSE1 ST_CLASSIC_HOUSE1
+#define ST_COTTAGE_HOUSE2 ST_CLASSIC_HOUSE2
+#define ST_COTTAGE_BARN ST_CLASSIC_BARN
+#define STYLE_COTTAGE STYLE_CLASSIC
+#endif
+extern const char *const style_names[NSTYLE];
+void load_style(uint8_t s);
+#endif

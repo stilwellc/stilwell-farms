@@ -1,0 +1,9 @@
+# key Eb major  meter 4/4
+# Lullaby cadence (plagal-then-perfect): Ab | Bb | Eb, slow, no drums.
+song JINGLE_SLEEP tempo=10 loop=no
+ch1 duty=2 env=77
+o5 e-4 c4 o4 b-4 a-4 | o4 g4 a-8 g8 f2 | o4 e-1 |
+ch2 duty=1 env=54
+o4 c2 e-2 | o4 d2 o3 b-4 a-4 | o3 g1 |
+ch3 wave=soft vol=2
+o2 a-2 o3 e-2 | o2 b-2 o3 f2 | o2 e-1 |

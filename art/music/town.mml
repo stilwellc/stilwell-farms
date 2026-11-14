@@ -1,0 +1,34 @@
+# key Bb major  meter 4/4
+# Cheerful and bustling: chattering repeated-note 8ths, 16th-pair off-beat chords.
+# A  (1-8):   Bb Gm Cm-F Bb | Bb Eb C7 F    (C7 = V/V, E natural intentional)
+# B  (9-16):  Eb F  Dm  Gm  | Eb F  Gm-C7 F (sung quarter notes, walking bass)
+# A' (17-24): Bb Gm Cm-F Bb | Eb F  Bb  F7  (turnaround)
+song TOWN tempo=7 loop=yes
+ch1 duty=2 env=a1
+o5 d8 d8 f8 d8 o4 b-8 o5 c8 d8 o4 b-8 | o4 b-8 a8 g8 b-8 o5 d4 o4 b-4 | o5 c8 e-8 g8 e-8 f8 e-8 d8 c8 | o5 d4 o4 b-4 f4 r4 |
+o5 f8 f8 g8 f8 d8 c8 d8 f8 | o5 g8 f8 e-8 f8 g4 e-4 | o5 e8 g8 b-8 g8 e8 d8 c8 e8 | o5 f4 e-8 d8 c4 r4 |
+o5 g4. f8 e-4 g4 | o5 f4. e-8 d4 c4 | o5 f4. e-8 d4 o4 a4 | o4 b-4. a8 g4 b-4 |
+o5 e-4. f8 g4 b-4 | o5 a4. g8 f4 e-4 | o5 d4 o4 b-4 o5 e4 g4 | o5 f4 a4 f8 e-8 d8 c8 |
+o5 d8 d8 f8 d8 o4 b-8 o5 c8 d8 o4 b-8 | o4 b-8 a8 g8 b-8 o5 d4 o4 b-4 | o5 c8 e-8 g8 e-8 f8 e-8 d8 c8 | o5 d4 o4 b-4 f4 r4 |
+o5 g8 f8 e-8 f8 g4 e-4 | o5 a8 a8 f8 a8 o6 c4 o5 a4 | o5 b-8 a8 b-8 f8 d4 o4 b-4 | o5 c8 d8 e-8 c8 o4 a8 f8 a8 o5 c8 |
+ch2 duty=1 env=51
+r8 o4 d16 f16 r8 d16 f16 r8 d16 f16 r8 d16 f16 | r8 o3 b-16 o4 d16 r8 o3 b-16 o4 d16 r8 o3 b-16 o4 d16 r8 o3 b-16 o4 d16 | r8 c16 e-16 r8 c16 e-16 r8 c16 f16 r8 c16 f16 | r8 d16 f16 r8 d16 f16 r8 d16 f16 r8 d16 f16 |
+r8 d16 f16 r8 d16 f16 r8 d16 f16 r8 d16 f16 | r8 o3 b-16 o4 e-16 r8 o3 b-16 o4 e-16 r8 o3 b-16 o4 e-16 r8 o3 b-16 o4 e-16 | r8 o3 b-16 o4 c16 r8 o3 b-16 o4 c16 r8 o3 b-16 o4 c16 r8 o3 b-16 o4 c16 | r8 c16 f16 r8 c16 f16 r8 c16 f16 r8 c16 f16 |
+o3 g8 b-8 o4 e-8 o3 b-8 g8 b-8 o4 e-8 o3 b-8 | a8 o4 c8 f8 c8 o3 a8 o4 c8 f8 c8 | o3 a8 o4 d8 f8 d8 o3 a8 o4 d8 f8 d8 | o3 g8 b-8 o4 d8 o3 b-8 g8 b-8 o4 d8 o3 b-8 |
+g8 b-8 o4 e-8 o3 b-8 g8 b-8 o4 e-8 o3 b-8 | a8 o4 c8 f8 c8 o3 a8 o4 c8 f8 c8 | o3 g8 b-8 o4 d8 o3 b-8 g8 b-8 o4 c8 o3 b-8 | a8 o4 c8 f8 c8 o3 a8 o4 c8 f8 c8 |
+r8 d16 f16 r8 d16 f16 r8 d16 f16 r8 d16 f16 | r8 o3 b-16 o4 d16 r8 o3 b-16 o4 d16 r8 o3 b-16 o4 d16 r8 o3 b-16 o4 d16 | r8 c16 e-16 r8 c16 e-16 r8 c16 f16 r8 c16 f16 | r8 d16 f16 r8 d16 f16 r8 d16 f16 r8 d16 f16 |
+r8 o3 b-16 o4 e-16 r8 o3 b-16 o4 e-16 r8 o3 b-16 o4 e-16 r8 o3 b-16 o4 e-16 | r8 c16 f16 r8 c16 f16 r8 c16 f16 r8 c16 f16 | r8 d16 f16 r8 d16 f16 r8 d16 f16 r8 d16 f16 | r8 c16 e-16 r8 c16 e-16 r8 c16 e-16 r8 c16 e-16 |
+ch3 wave=bass vol=2
+o2 b-8 b-8 o3 f8 o2 b-8 o3 b-8 o2 b-8 o3 f8 o2 b-8 | g8 g8 o3 d8 o2 g8 o3 g8 o2 g8 o3 d8 o2 g8 | o3 c8 c8 g8 c8 o2 f8 f8 o3 c8 o2 f8 | b-8 b-8 o3 f8 o2 b-8 o3 b-8 o2 b-8 o3 f8 o2 b-8 |
+b-8 b-8 o3 f8 o2 b-8 o3 b-8 o2 b-8 o3 f8 o2 b-8 | o3 e-8 e-8 b-8 e-8 o4 e-8 o3 e-8 b-8 e-8 | c8 c8 g8 c8 o4 c8 o3 c8 g8 c8 | o2 f8 f8 o3 c8 o2 f8 o3 f8 o2 f8 o3 c8 o2 f8 |
+o3 e-4 b-4 e-4 b-4 | o2 f4 o3 c4 o2 f4 o3 c4 | d4 a4 d4 a4 | o2 g4 o3 d4 o2 g4 o3 d4 |
+e-4 b-4 e-4 b-4 | o2 f4 o3 c4 o2 f4 o3 c4 | o2 g4 o3 d4 c4 g4 | o2 f4 o3 c4 o2 f4 o3 c4 |
+o2 b-8 b-8 o3 f8 o2 b-8 o3 b-8 o2 b-8 o3 f8 o2 b-8 | g8 g8 o3 d8 o2 g8 o3 g8 o2 g8 o3 d8 o2 g8 | o3 c8 c8 g8 c8 o2 f8 f8 o3 c8 o2 f8 | b-8 b-8 o3 f8 o2 b-8 o3 b-8 o2 b-8 o3 f8 o2 b-8 |
+o3 e-8 e-8 b-8 e-8 o4 e-8 o3 e-8 b-8 e-8 | o2 f8 f8 o3 c8 o2 f8 o3 f8 o2 f8 o3 c8 o2 f8 | b-8 b-8 o3 f8 o2 b-8 o3 b-8 o2 b-8 o3 f8 o2 b-8 | f8 f8 o3 c8 o2 f8 o3 f8 o2 f8 o3 c8 o2 f8 |
+ch4
+k8 h8 s8 h8 k8 h8 s8 h8 | k8 h8 s8 h8 k8 h8 s8 h8 | k8 h8 s8 h8 k8 h8 s8 h8 | k8 h8 s8 h8 k8 h8 s8 h8 |
+k8 h8 s8 h8 k8 h8 s8 h8 | k8 h8 s8 h8 k8 h8 s8 h8 | k8 h8 s8 h8 k8 h8 s8 h8 | k8 h8 s8 h8 k8 s8 s8 s8 |
+k4 h8 h8 s4 h8 h8 | k4 h8 h8 s4 h8 h8 | k4 h8 h8 s4 h8 h8 | k4 h8 h8 s4 h8 h8 |
+k4 h8 h8 s4 h8 h8 | k4 h8 h8 s4 h8 h8 | k4 h8 h8 s4 h8 h8 | k4 h8 h8 s8 s8 s16 s16 s8 |
+k8 h8 s8 h8 k8 h8 s8 h8 | k8 h8 s8 h8 k8 h8 s8 h8 | k8 h8 s8 h8 k8 h8 s8 h8 | k8 h8 s8 h8 k8 h8 s8 h8 |
+k8 h8 s8 h8 k8 h8 s8 h8 | k8 h8 s8 h8 k8 h8 s8 h8 | k8 h8 s8 h8 k8 h8 s8 h8 | k8 s8 s8 h8 s8 s16 s16 s8 s8 |

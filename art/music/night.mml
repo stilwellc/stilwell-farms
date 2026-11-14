@@ -1,0 +1,20 @@
+# key Eb major  meter 4/4
+# Slow and calm, no drums: lullaby line over rising/falling quarter-note arps.
+# A (1-8):  Eb     Cm7 Abmaj7 Bb | Eb     Gm Abmaj7 Bb
+# B (9-16): Abmaj7 Bb  Gm     Cm | Fm7    Bb Ab     Bb7  (turnaround)
+song NIGHT tempo=10 loop=yes
+ch1 duty=2 env=77
+o4 b-2 g4 e-4 | o4 f2 e-4 c4 | o4 e-2. c4 | o4 d2. f4 |
+o4 b-2 g4 b-4 | o5 d2 o4 b-4 g4 | o5 c2. o4 a-4 | o4 b-2 a-4 f4 |
+o4 e-2 c4 e-4 | o4 d2 f4 b-4 | o4 b-2 g4 d4 | o4 e-2. g4 |
+o4 a-2 g4 f4 | o4 f2 d4 f4 | o5 c2 o4 a-4 f4 | o4 d2 f4 a-4 |
+ch2 duty=1 env=43
+o3 e-4 g4 b-4 o4 e-4 | o3 e-4 g4 b-4 o4 c4 | o3 e-4 g4 a-4 o4 c4 | o3 f4 b-4 o4 d4 f4 |
+o3 e-4 g4 b-4 o4 e-4 | o3 g4 b-4 o4 d4 g4 | o3 e-4 g4 a-4 o4 c4 | o3 f4 b-4 o4 d4 f4 |
+c4 o3 a-4 g4 e-4 | o4 f4 d4 o3 b-4 f4 | o4 g4 d4 o3 b-4 g4 | o4 e-4 c4 o3 g4 e-4 |
+o4 c4 o3 a-4 f4 e-4 | o4 f4 d4 o3 b-4 f4 | o4 e-4 c4 o3 a-4 e-4 | o4 d4 o3 b-4 a-4 f4 |
+ch3 wave=soft vol=2
+o3 e-2 b-4 o4 e-4 | o3 c2 g4 o4 c4 | o2 a-2 o3 e-4 a-4 | o2 b-2 o3 f4 b-4 |
+e-2 b-4 o4 e-4 | o2 g2 o3 d4 g4 | o2 a-2 o3 e-4 a-4 | o2 b-2 o3 f4 b-4 |
+o2 a-2 o3 e-4 a-4 | o2 b-2 o3 f4 b-4 | o2 g2 o3 d4 g4 | c2 g4 o4 c4 |
+o2 f2 o3 c4 f4 | o2 b-2 o3 f4 b-4 | o2 a-2 o3 e-4 a-4 | o2 b-2 o3 f4 b-4 |

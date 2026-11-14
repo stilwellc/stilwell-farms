@@ -1,0 +1,29 @@
+map TITLE set=FARM w=10 h=9 music=TITLE
+key # FOREST
+key . GRASS
+key , GRASS2
+key b SHIP_BIN
+key t FRUIT_TREE_RIPE
+key P RIPE_PUMPKIN
+key C RIPE_CORN
+key T RIPE_TOMATO
+key K RIPE_CARROT
+key S RIPE_STRAWB
+key R RIPE_RADISH
+key M RIPE_MELON
+key F RIPE_SUNFLOWER
+key o FENCE_POST
+key - FENCE_H
+grid
+##########
+.,..,..,.,
+..,..,..,.
+.,..,..,..
+..,..,..,.
+.,..,t..,.
+..,.b..,..
+oPCTKSRMFo
+----------
+place LOGO 1 1
+place TITLE_HOUSE 1 4
+place TITLE_BARN 6 4

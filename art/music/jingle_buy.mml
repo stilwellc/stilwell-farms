@@ -1,0 +1,11 @@
+# key C major  meter 4/4
+# Big purchase: a cash-register sweep up the C arpeggio, then IV V | I (F G | C).
+song JINGLE_BUY tempo=6 loop=no
+ch1 duty=2 env=b2
+o4 c16 e16 g16 o5 c16 e16 g16 o6 c8 r8 o5 g8 o6 c4 | o5 a8 f8 b8 g8 o6 c2 |
+ch2 duty=1 env=72
+o4 e4 g4 e4 g4 | o4 f4 g4 e2 |
+ch3 wave=bass vol=2
+o3 c4 g4 c4 g4 | o2 f4 g4 o3 c2 |
+ch4
+k8 h8 h8 h8 k8 h8 s8 s8 | k4 s4 k4 r4 |

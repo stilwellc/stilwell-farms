@@ -1,0 +1,40 @@
+// Stilwell Farms -- decor catalogue (bank 0 table)
+#include <gb/gb.h>
+#include "game.h"
+#include "decor.h"
+
+const DecorDef decor[NUM_DECOR] = {
+    {"", MT_GRASS, 1, 0, 0, 0, 0},
+    {"Bridge", MT_BRIDGE_H, 1, 0, 100, 4, 0},
+    {"Wood Fence", MT_FENCE_POST, 0, 1, 0, 1, 0},
+    {"Picket Fence", MT_PICKET_POST, 0, 2, 10, 1, 0},
+    {"Stone Wall", MT_STONEWALL_POST, 0, 3, 0, 0, 2},
+    {"Modern Fence", MT_MODERNFENCE_POST, 0, 4, 25, 0, 1},
+    {"Stone Path", MT_PATH, 1, 0, 0, 0, 1},
+    {"Brick Path", MT_BRICK, 1, 0, 10, 0, 1},
+    {"Gravel Path", MT_GRAVEL, 1, 0, 5, 0, 0},
+    {"Plank Path", MT_PLANK, 1, 0, 0, 1, 0},
+    {"Flower Bed", MT_FLOWERBED, 0, 0, 30, 0, 0},
+    {"Red Flowers", MT_FLOWERS_RED, 0, 0, 30, 0, 0},
+    {"Blue Flowers", MT_FLOWERS_BLUE, 0, 0, 30, 0, 0},
+    {"Gold Flowers", MT_FLOWERS_YELLOW, 0, 0, 30, 0, 0},
+    {"Hedge", MT_HEDGE, 0, 0, 40, 0, 0},
+    {"Statue", MT_STATUE, 0, 0, 800, 0, 20},
+    {"Fountain", MT_FOUNTAIN, 0, 0, 1200, 0, 30},
+    {"Rose Arch", MT_ARCH, 1, 0, 300, 6, 0},
+    {"Picnic Table", MT_PICNIC, 0, 0, 150, 8, 0},
+    {"String Lights", MT_STRINGLIGHTS, 0, 0, 200, 2, 0},
+    {"Lamp", MT_LAMP, 0, 0, 150, 0, 4},
+    {"Bench", MT_BENCH, 0, 0, 0, 6, 0},
+    {"Scarecrow", MT_SCARECROW, 0, 0, 80, 4, 0},
+    {"Sprinkler", MT_SPRINKLER, 0, 0, 300, 0, 5},
+    {"Big Sprinkler", MT_QSPRINKLER, 0, 0, 1200, 0, 10},
+    {"Beehive", MT_BEEHIVE, 0, 0, 500, 10, 0},
+    {"Lightning Rod", MT_LIGHTNING_ROD, 0, 0, 400, 0, 6},
+    {"Hay Bale", MT_HAY_BALE, 0, 0, 20, 0, 0},
+    {"Trough", MT_TROUGH, 0, 0, 100, 5, 0},
+    {"Mailbox", MT_MAILBOX, 0, 0, 50, 2, 0},
+    {"Shipping Bin", MT_SHIP_BIN, 0, 0, 200, 10, 0},
+    {"Well", MT_WELL, 0, 0, 400, 0, 15},
+    {"Farm Sign", MT_SIGN, 0, 0, 50, 3, 0},
+};

@@ -1,0 +1,5 @@
+# Placeholder so other maps can warp to the farm; the farm itself is the dynamic world.
+map FARM set=FARM w=1 h=1
+key . GRASS walk
+grid
+.

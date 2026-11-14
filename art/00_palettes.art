@@ -1,0 +1,22 @@
+# Stilwell Farms palettes. Index 0 = lightest ... 3 = darkest (outline).
+# BG palettes (max 8). KEY letter is used in palmap strings.
+palette bg G GRASS   d8f0a0 88c850 3c8c3c 183828
+palette bg S SOIL    e8c890 b07840 6c4428 2c1810
+palette bg W WOOD    f8f0d8 d08c48 885028 2c1810
+palette bg T STONE   f8f8f8 b8c0c8 707c98 202838
+palette bg C CROP    b07840 6c4428 58b040 183828
+palette bg R RED     b07840 58b040 e04838 2c1810
+palette bg O ORANGE  b07840 58b040 f8a830 2c1810
+palette bg U UI      f8d048 f8f8f0 5070b0 182038
+
+# Sprite palettes (colour 0 is transparent).
+palette obj P PLAYER   000000 f8d0a0 3868d0 181830
+palette obj N MERCHANT 000000 f8d0a0 48a048 181830
+palette obj K CURSOR   000000 f8f8f8 f8d030 101018
+palette obj F FX       000000 f8f8f8 88c8f8 2850a0
+palette obj A ANIMAL   000000 f8f8f8 c88850 302018
+
+# Seasonal grass: summer deepens, fall turns golden, winter snows over (trees and green roofs follow)
+season GRASS SUMMER c8e890 6cb440 2c7830 102c1c
+season GRASS FALL    f0d890 d8a040 a86028 3c2010
+season GRASS WINTER  f8f8f8 c8d8e8 8098b8 283850

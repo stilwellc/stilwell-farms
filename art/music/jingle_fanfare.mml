@@ -1,0 +1,11 @@
+# key G major  meter 4/4
+# Milestone fanfare: the farm motif (D-G-A-B-D'-G') in parallel thirds, then C D | G cadence.
+song JINGLE_FANFARE tempo=6 loop=no
+ch1 duty=2 env=c3
+o4 d8 g8 a8 b8 o5 d4 g4 | o5 e8 g8 f+8 a8 g2 |
+ch2 duty=2 env=93
+o3 b8 o4 d8 f+8 g8 b4 o5 d4 | o5 c8 e8 d8 f+8 d2 |
+ch3 wave=bass vol=1
+o2 g4 g4 g4 g4 | o3 c4 d4 o2 g2 |
+ch4
+k8 h8 s8 h8 k8 k8 s4 | s16 s16 s8 s8 s8 k2 |

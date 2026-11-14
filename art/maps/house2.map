@@ -1,0 +1,31 @@
+# Your big house, inside (level 2). Same origin as house1 (floor starts at 1,2) so furniture carries over.
+map HOUSE2 set=INTERIOR w=14 h=12 music=NONE
+key L WALL_SIDE_L block
+key R WALL_SIDE_R block
+key T WALL_TOP block
+key W WALL block
+key E FLOOR_EDGE walk
+key . FLOOR_WOOD walk
+key X WALL_FRONT block
+key C WALL_CORNER_L block
+key D WALL_CORNER_R block
+key M DOOR_MAT_L walk
+key N DOOR_MAT_R walk
+grid
+LTTTTTTTTTTTTR
+LWWWWWWWWWWWWR
+LEEEEEEEEEEEER
+L............R
+L............R
+L............R
+L............R
+L............R
+L............R
+L............R
+L............R
+CXXXXXMNXXXXXD
+place WALL_WINDOW 2 0
+place WALL_WINDOW 7 0
+place WALL_WINDOW 11 0
+warp 6 11 FARM 0 0 down
+warp 7 11 FARM 0 0 down
