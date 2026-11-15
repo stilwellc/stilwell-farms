@@ -42,7 +42,7 @@ void hud_draw(void) BANKED {
     hb[0] = building ? GL_CURSOR : tool_icon[G.tool];
     hb[1] = season_icon[G.season];
     hud_2(2, G.day, 1);
-    hb[4] = GL_HUD_BLANK;   // a blank parts the date from the clock group; 6px HUD weather glyphs keep 10:00 clear
+    hb[4] = G.buff ? GL_HUD_BUFF : GL_HUD_BLANK;   // food buff (cooking.c), else a blank parts the date from the clock group; 6px HUD weather glyphs keep 10:00 clear
     hb[5] = G.time >= 1200 ? GL_HUD_MOON : wx_icon[G.weather & 3];
     for (t = G.time; t >= 60; t -= 60) h++;
     m = (uint8_t)t;
@@ -59,9 +59,10 @@ void hud_draw(void) BANKED {
     hb[15] = GL_HUD_COIN;
     if (G.gold >= 10000) {
         uint32_t g = G.gold / 1000;   // the one 32-bit divide
-        uint8_t d, any;
-        dig_v = g > 999 ? 999 : (uint16_t)g;
-        d = digit(100); any = d; hb[16] = any ? HD(d) : GL_HUD_BLANK;
+        uint8_t d, any = 0;
+        dig_v = g > 9999 ? 9999 : (uint16_t)g;
+        if (dig_v >= 1000) { d = digit(1000); hb[15] = HD(d); any = 1; }   // a millionaire: 1000k.. over the coin
+        d = digit(100); any |= d; hb[16] = any ? HD(d) : GL_HUD_BLANK;
         d = digit(10); any |= d; hb[17] = any ? HD(d) : GL_HUD_BLANK;
         hb[18] = HD((uint8_t)dig_v);
         hb[19] = GL_HUD_K;
@@ -114,10 +115,12 @@ void tool_toast(void) BANKED {
 void after_step(void) BANKED {
     uint8_t x, y, c, k;
     uint16_t i;
+    if (IS_AREA(scene)) { area_step(); return; }   // the mine and the beach: footsteps + ladders (areas.c)
     if (scene != SCENE_FARM) { sfx(SFX_STEP); }
+    else if (riding) { if ((G.px ^ G.py) & 1) sfx(SFX_STEP_WOOD); }   // hoofbeats
     else {
         i = WIDX(G.px, G.py);
-        c = G.cell[i]; k = G.a1[i];
+        c = W_CELL[i]; k = W_A1[i];
         if (c == C_SAND) sfx(SFX_STEP_SAND);
         else if (c == C_DECOR)
             sfx(k == DK_GRAVEL ? SFX_STEP_GRAVEL : (k == DK_PLANK || k == DK_BRIDGE) ? SFX_STEP_WOOD : SFX_STEP);
@@ -131,7 +134,7 @@ void after_step(void) BANKED {
     }
     if (scene != SCENE_FARM || !front_cell(&x, &y)) return;
     i = WIDX(x, y);
-    c = G.cell[i];
+    c = W_CELL[i];
     if (!owned(x, y)) {
         if (c != C_ROAD && !(G.tips & TIP_LAND)) {
             G.tips |= TIP_LAND;

@@ -29,6 +29,7 @@ void sfx(uint8_t id) BANKED {
     case SFX_CURSOR: case SFX_TEXT: case SFX_BUMP: music_hold(1, 10); break;
     case SFX_HIT: case SFX_CHOP: case SFX_WATER: case SFX_STEP:
     case SFX_STEP_WOOD: case SFX_STEP_GRAVEL: case SFX_STEP_SAND: music_hold(3, 12); break;
+    case SFX_SIZZLE: music_hold(3, 24); break;
     default: music_hold(0, 20); break;
     }
     switch (id) {
@@ -47,5 +48,6 @@ void sfx(uint8_t id) BANKED {
     case SFX_STEP_WOOD: noise(0x31, 0x5E, 0x3C); break;     // hollow knock on planks
     case SFX_STEP_GRAVEL: noise(0x41, 0x23, 0x38); break;   // short crunch
     case SFX_STEP_SAND: noise(0x23, 0x14, 0x34); break;     // soft shushing splash
+    case SFX_SIZZLE: noise(0x74, 0x12, 0x00); break;        // a long soft hiss in the pan
     }
 }

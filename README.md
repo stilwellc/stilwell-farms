@@ -21,9 +21,9 @@
 ## Grandpa left you the farm.
 
 It's overgrown. The barn has caved in. The shack's roof leaks.<br>
-But the land is good, and there's a whole valley of it for sale.
+But the land is good, and there's a whole valley of it out there.
 
-**Clear it. Plant it. Build it your way.**
+**Clear it. Plant it. Build it your way. Then build up the town.**
 
 </div>
 
@@ -33,13 +33,13 @@ But the land is good, and there's a whole valley of it for sale.
 
 ## Watch it grow.
 
-The same farm, from the first morning to the late game.
+One farm, played from the first morning to its first fall.
 
-<img src="docs/media/maturity.gif" alt="The farm growing from day one to the late game" width="560">
+<img src="docs/media/maturity.gif" alt="The farm growing from day one to fall, then after dark" width="576">
 
 <br><br>
 
-<img src="docs/media/maturity.png" alt="Day 1, Season 1, Year 1 and late game, side by side" width="860">
+<img src="docs/media/maturity.png" alt="The valley on day 1, spring 5, summer 9 and fall 11" width="860">
 
 </div>
 
@@ -51,82 +51,197 @@ The same farm, from the first morning to the late game.
 
 ### Plant something legendary.
 Fourteen crops across four seasons, and fruit trees that last forever. Seed packets come in
-**Common**, **Rare** and **Legendary**: rare crops double the harvest, and legendary ones twinkle in
-the field and come up three or four at a time, always gold star. Till, plant, water, sleep, and wake
-up to sprouts.
+**Common**, **Rare** and **Legendary**: rare crops double the harvest, legendary ones twinkle in the
+field and come up three or four at a time, always gold star. Till, water, sow, sleep, wake up to sprouts.
 
 </td>
-<td width="50%"><img src="docs/media/farming.gif" alt="Tilling, planting, watering, sleeping and harvesting" width="100%"></td>
+<td width="50%"><img src="docs/media/farming.gif" alt="Tilling, watering and sowing radishes, sleeping, then harvesting" width="100%"></td>
 </tr>
 <tr>
-<td width="50%"><img src="docs/media/building.gif" alt="Placing fences, flowers, a path, a pond and a windmill" width="100%"></td>
+<td width="50%"><img src="docs/media/building.gif" alt="Placing a windmill from its ghost, painting a picket fence and flowers, digging a pond" width="100%"></td>
 <td width="50%" valign="middle">
 
 ### Build it your way.
-Barns, coops, greenhouses, silos, sheds, stables, windmills, farm stands and gazebos go wherever
-you want them. Each building previews as a ghost before you place it. Lay fences, paths, hedges, flower
-beds and string lights, dig ponds, and pick anything up to move it later.
+Barns, coops, greenhouses, silos, sheds, stables, windmills, farm stands and gazebos go wherever you
+want them, each previewed as a ghost first. Fences, paths, hedges, flower beds, lamps and string lights,
+ponds and bridges. Pick anything up and move it later.
 
 </td>
 </tr>
 <tr>
 <td width="50%" valign="middle">
 
-### Buy the valley.
-Your farm sits in a 16-plot valley. Walk up to the rope line, read the sign, and buy the
-Wildflower Hill, the Lakeside, the River Bend, the Pine Woods or the Old Orchard. The rope comes down
-and the land is yours to work.
+### Design tools that feel like drawing.
+Hold **A** and walk to lay a whole path or fence line in one stroke. **SELECT** swaps to the eraser,
+and the build-mode quick menu has **UNDO** for anything you regret. Recolour every roof, plank and
+stone on the farm from a swatch page, live. Copy a corner you love into a **blueprint** and stamp it
+down anywhere, ghost first.
 
 </td>
-<td width="50%"><img src="docs/media/land.gif" alt="Buying a plot of land at the rope line" width="100%"></td>
+<td width="50%"><img src="docs/media/design.gif" alt="Recolouring roofs, painting a brick path, erasing a fence, undo, and stamping a blueprint" width="100%"></td>
 </tr>
 <tr>
-<td width="50%"><img src="docs/media/animals.gif" alt="A golden cow, a Jersey cow, sheep and hens" width="100%"></td>
+<td width="50%"><img src="docs/media/valley.gif" alt="The valley map page, buying a plot across the river" width="100%"></td>
+<td width="50%" valign="middle">
+
+### A whole valley, 64 by 64.
+Your farm is the middle of a big valley of woods, lakes, marsh, quarries and a river, split into 64
+plots. Walk up to a rope line and read the sign, or open the new **valley map**, which shows every plot
+by what grows on it, slide the bracket over the one you want and buy it right there.
+
+</td>
+</tr>
+<tr>
 <td width="50%" valign="middle">
 
 ### Raise a golden herd.
 Cows, hens and sheep, each with a name. Rare Jersey cows, brown hens and cocoa sheep give double, and
-golden breeds give double gold-star milk, eggs and wool. Shear sheep right in the field. Two happy adults may have a baby
-overnight, and sometimes it comes out one breed better.
+golden breeds give double gold-star milk, eggs and wool. Shear right in the field. Two happy adults may
+have a baby overnight, and sometimes it comes out one breed better.
+
+</td>
+<td width="50%"><img src="docs/media/animals.gif" alt="Petting a golden cow, shearing a sheep, petting a golden hen" width="100%"></td>
+</tr>
+<tr>
+<td width="50%"><img src="docs/media/barns.gif" alt="Inside the barn: milking, shearing, filling the mangers; inside the coop: an egg and the trough" width="100%"></td>
+<td width="50%" valign="middle">
+
+### Walk into the barn.
+Barns and coops have insides now. On rainy days and at night everyone is in their stall. Milk and
+shear by hand, check each animal's panel, fork hay into the mangers, and collect eggs from the nest
+boxes. Every building style has its own walls and floor.
 
 </td>
 </tr>
 <tr>
+<td width="50%" valign="middle">
+
+### Saddle up.
+Build a stable and Rosa will sell you a horse: white, chestnut or palomino. Name it, brush it every
+day and it grows fond of you. Climb on and the farm goes by at twice walking speed.
+
+</td>
+<td width="50%"><img src="docs/media/horse.gif" alt="Buying and naming a horse, brushing it, riding across the farm" width="100%"></td>
+</tr>
+<tr>
+<td width="50%"><img src="docs/media/farmhands.gif" alt="Hiring a farmhand at town hall, then the crew at work" width="100%"></td>
 <td width="50%" valign="middle">
 
 ### Hire some help.
 Mayor Hollis knows folks in town who want work. Hire a Waterer, a Harvester, a Rancher and a
-Groundskeeper. They show up on your farm by day and do their jobs overnight: watering, harvesting and
-shipping, feeding the animals, pulling weeds. Wages grow with the farm, so keep some cash on hand.
+Groundskeeper. They show up on your farm by day and do their jobs overnight. Wages grow with the farm.
 
 </td>
-<td width="50%"><img src="docs/media/farmhands.gif" alt="Hiring a farmhand at town hall, then the crew at work" width="100%"></td>
 </tr>
 <tr>
-<td width="50%"><img src="docs/media/town.gif" alt="Walking into town and opening a bakery" width="100%"></td>
 <td width="50%" valign="middle">
 
 ### Open a business in town.
-Follow the road south to a little town of shops and neighbours. Buy one of the boarded-up storefronts
-and open a **Bakery**, a **Juice Bar**, a **Creamery** or a **Florist**. Stock the pantry with what
-you grow and it sells pies, smoothies, ice cream and bouquets every night. Upgrade the kitchen
-to sell more, for more.
+Follow the road south to a little town of shops and neighbours. Buy a boarded-up storefront and open a
+**Bakery**, a **Juice Bar**, a **Creamery** or a **Florist**. Stock the pantry with what you grow and
+it sells every night.
+
+</td>
+<td width="50%"><img src="docs/media/town.gif" alt="Walking into town and opening a bakery" width="100%"></td>
+</tr>
+<tr>
+<td width="50%"><img src="docs/media/invest.gif" alt="Restyling a storefront, funding Square Paving, opening Market Street and building a brewery" width="100%"></td>
+<td width="50%" valign="middle">
+
+### Grow the town.
+Give every storefront a new look in four styles and three facade tiers. Open **Market Street** south
+of the park and build a **Brewery**, **Winery**, **Restaurant** or **Inn** on its lots, each with a
+manager and a pantry. Fund community projects (paving, a playground, a boardwalk, a bandstand, a
+community garden, a library) and watch Town Prosperity climb.
 
 </td>
 </tr>
 <tr>
 <td width="50%" valign="middle">
 
-### Make the house a home.
-Buy furniture from the catalogue and arrange it however you like: rugs, armchairs, house plants,
-bookshelves, tables, lamps, a fridge, a fireplace, paintings. Upgrade to the Big House and your
-furniture comes with you. The TV has tomorrow's forecast, and the diary saves your game.
+### A town with a life of its own.
+Rosa, Brick, June, Ada, Mayor Hollis and Milo keep their own hours: open up shop, meet for lunch on the
+cafe terrace, head to the bandstand in the evening. They wave as you pass, and as friendships grow
+they come find you for heart events, little scenes you remember.
 
 </td>
-<td width="50%"><img src="docs/media/interior.gif" alt="Decorating the house interior" width="100%"></td>
+<td width="50%"><img src="docs/media/townlife.gif" alt="Townsfolk walking to lunch, greetings, and Rosa's first heart event" width="100%"></td>
 </tr>
 <tr>
-<td width="50%"><img src="docs/media/seasons.gif" alt="The farm in spring, summer, fall, winter and at night" width="100%"></td>
+<td width="50%"><img src="docs/media/festivals.gif" alt="Egg hunt, koi derby, giant produce judging and a snowball fight" width="100%"></td>
+<td width="50%" valign="middle">
+
+### A festival every season.
+The **Flower Show** egg hunt in spring, the **Koi Derby** at the fountain in summer, **Giant Produce**
+judging in fall and the **Star Night** snowball fight in winter. Each is its own little minigame,
+with ribbons for the goods log.
+
+</td>
+</tr>
+<tr>
+<td width="50%" valign="middle">
+
+### Restore the valley.
+The town hall board lists six projects: the Town Garden, the Old Orchard, Clear Streams, Town Lamps,
+the Market Pantry and the Town Fountain. Donate what you grow, fish and dig, and each one changes the
+town for good. Finish all six for the finale.
+
+</td>
+<td width="50%"><img src="docs/media/restoration.gif" alt="The Valley Restoration board, a donation, the park turned into a garden, the finale" width="100%"></td>
+</tr>
+<tr>
+<td width="50%"><img src="docs/media/mine.gif" alt="The mine: breaking rocks, a ladder down, the lift to floor 20, a ruby" width="100%"></td>
+<td width="50%" valign="middle">
+
+### Go down the mine.
+West of town, the old Stilwell mine goes twenty floors deep. Hammer rocks for stone, coal and ore,
+hunt for the ladder down, and dig up amethyst, topaz, emerald, ruby and diamond. The lift remembers
+how far you've been.
+
+</td>
+</tr>
+<tr>
+<td width="50%" valign="middle">
+
+### Spend a morning at the beach.
+East of town the sand washes up something new every morning: shells, driftwood and more.
+Walk out on the pier and cast into the ocean, where the sea has fish of its own.
+
+</td>
+<td width="50%"><img src="docs/media/beach.gif" alt="The beach: driftwood, a shell, ocean fishing off the pier" width="100%"></td>
+</tr>
+<tr>
+<td width="50%"><img src="docs/media/fishing.gif" alt="The fishing minigame" width="100%"></td>
+<td width="50%" valign="middle">
+
+### Go fishing.
+Cast into any water, wait for the bite and reel it in. What bites depends on the water, the season and
+the time of day.
+
+</td>
+</tr>
+<tr>
+<td width="50%" valign="middle">
+
+### Cook something good.
+Grandpa left recipe cards taped inside the fridge, and there are sixteen dishes to find. Cook at the
+kitchen, then eat for energy and a buff: **Brisk** dishes have you walking at a run.
+
+</td>
+<td width="50%"><img src="docs/media/cooking.gif" alt="Grandpa's recipe cards, the recipe book, cooking an omelet, eating for a buff" width="100%"></td>
+</tr>
+<tr>
+<td width="50%"><img src="docs/media/interior.gif" alt="Decorating the house interior" width="100%"></td>
+<td width="50%" valign="middle">
+
+### Make the house a home.
+Buy furniture from the catalogue and arrange it however you like: rugs, armchairs, plants,
+bookshelves, lamps, a fridge, a fireplace, paintings. Upgrade to the Big House and it all comes with
+you. The TV has tomorrow's forecast, and the diary saves your game.
+
+</td>
+</tr>
+<tr>
 <td width="50%" valign="middle">
 
 ### Four seasons, and the nights between.
@@ -134,16 +249,7 @@ Spring greens, golden autumns, snowy winters, rain and thunderstorms. Evenings w
 and your lamps and string lights come on at 7pm.
 
 </td>
-</tr>
-<tr>
-<td width="50%" valign="middle">
-
-### Go fishing.
-Cast into any water, wait for the bite and reel it in. What bites depends on the water, the season
-and the time of day.
-
-</td>
-<td width="50%"><img src="docs/media/fishing.gif" alt="Fishing minigame" width="100%"></td>
+<td width="50%"><img src="docs/media/seasons.gif" alt="The farm in spring, summer, fall, winter, rain and at night" width="100%"></td>
 </tr>
 </table>
 
@@ -181,17 +287,22 @@ Renovate your house and every farm building into one of four styles.
 
 | | |
 |---|---|
-| **World** | A 32×32-tile scrolling farm split into 16 buyable land plots, plus a hand-built town |
+| **World** | A 64×64-tile valley of woods, lakes, marsh, quarries and a river in 64 buyable plots, a valley map, a town, a mine and a beach |
 | **Farming** | 14 crops in Common, Rare and Legendary, 4 fruit trees, quality stars, fertilizer, sprinklers, giant pumpkins |
-| **Animals** | Cows, hens and sheep with names and happiness, rare and golden breeds, wool, breeding, and Buddy the dog |
+| **Animals** | Cows, hens and sheep with names and happiness, rare and golden breeds, barn and coop interiors, breeding, a horse to ride, and Buddy the dog |
+| **Building** | 9 farm buildings, 30+ decorations, 4 fence and 4 path styles, ponds and bridges, move and remove |
+| **Design tools** | Paint lines by walking, an eraser, undo, farm-wide colour swatches, and blueprints you copy and stamp |
+| **Styles** | Classic, Modern, Log Cabin and Storybook Cottage, for the house, every farm building and every storefront |
 | **Farmhands** | Waterer, Harvester, Rancher and Groundskeeper, hired at town hall and paid nightly |
-| **Businesses** | Bakery, Juice Bar, Creamery and Florist storefronts to buy, stock and upgrade |
-| **Building** | 9 farm buildings, 30+ decorations, 4 fence styles, 4 path styles, ponds and bridges, move and remove |
-| **Styles** | Classic, Modern, Log Cabin and Storybook Cottage, covering the house and every farm building |
-| **Home** | A house interior with 11 kinds of furniture to buy and arrange, a TV forecast and a diary save |
-| **Town** | 6 townsfolk with portraits, friendship, gifts, a request board and seasonal festivals |
+| **Businesses** | Bakery, Juice Bar, Creamery and Florist on the square; Brewery, Winery, Restaurant and Inn on Market Street |
+| **Town** | 6 townsfolk with daily routines, portraits, friendship, gifts and heart events; community projects and Town Prosperity |
+| **Festivals** | An egg hunt, a koi derby, giant produce judging and a snowball fight, one each season |
+| **Restoration** | Six Valley Restoration projects that change the town, and a finale |
+| **Mine & beach** | A 20-floor mine with ore, gems and a lift; a beach to forage and an ocean to fish |
+| **Cooking** | 16 dishes from Grandpa's recipe cards, with energy and buffs |
+| **Home** | A house interior with furniture to buy and arrange, a TV forecast and a diary save |
 | **Crafting** | Kegs, cheese presses and preserve jars; ore for copper, iron and gold tools |
-| **Fishing** | A reel-in minigame with fish that depend on the water, season and time of day |
+| **Fishing** | Ponds, rivers, the fountain and the ocean, with fish that depend on the water, season and time of day |
 | **Goals** | Milestones with letters from Grandpa, a year-end review and a collection log |
 | **Sound** | Original chiptune songs and jingles on a custom 4-channel driver, plus sound effects |
 | **Saves** | Two battery-backed save slots, with an autosave every morning |
@@ -200,7 +311,7 @@ Renovate your house and every farm building into one of four styles.
 
 <div align="center">
 
-<img src="docs/media/screens.png" alt="Twelve screenshots: title, farm, town, dialog, menus, map, calendar, bag, rare seeds, Modern style, night and winter" width="860">
+<img src="docs/media/screens.png" alt="Twelve screenshots: title, the farm in fall, valley map, Market Street, a heart event, the barn, the mine, the beach, recipe book, snowball fight, farm colours and night" width="860">
 
 </div>
 
@@ -234,13 +345,13 @@ Renovate your house and every farm building into one of four styles.
 
 ## Controls
 
-| Button | On the farm | In menus |
-|---|---|---|
-| D-pad | Walk (tap to turn) | Move the cursor |
-| **A** | Use your tool, talk, harvest, pet, shear, pick up | Confirm |
-| **B** | Hold to run; leave build mode | Back |
-| **SELECT** | Switch tools | |
-| **START** | Menu: Tools, Seeds, Bag, Build, Farm (status, map, calendar, friends, goods, staff), Options, Save | |
+| Button | On the farm | In build mode | In menus |
+|---|---|---|---|
+| D-pad | Walk (tap to turn) | Move | Move the cursor |
+| **A** | Use your tool, talk, harvest, pet, shear, pick up; on your horse: ride or climb down | Place; hold and walk to paint a line | Confirm |
+| **B** | Hold to run; climb off your horse | Leave build mode | Back |
+| **SELECT** | Switch tools | Swap to the eraser and back | |
+| **START** | Menu: Tools, Seeds, Bag, Build, Farm (status, map, calendar, friends, goods, staff), Options, Save | Quick menu: Undo, Items, Eraser, Colours, Main menu, Done | |
 
 The status bar shows your tool, the season and day, the weather, the clock, your energy and your gold.
 
@@ -254,6 +365,8 @@ real Game Boy Color hardware.
 - **Tile cache.** The Game Boy Color can only show 512 background tiles at once. The game keeps all of
   its art on the cartridge and streams just the tiles on screen into video memory as you scroll,
   reference-counting each one. That's what lets one game hold hundreds of buildings, crops and decorations.
+- **A valley in battery RAM.** The 64×64 world (every cell's ground, crop and decoration) lives in the
+  cartridge's battery-backed RAM, so the whole valley is saved exactly as you left it.
 - **Text art pipeline.** Every tile, sprite and map is a text file in `art/`, compiled by
   `tools/gen_art.py` into banked C data. Maps (`art/maps/*.map`) are plain-text grids.
 - **Music.** Songs are written in a small MML dialect (`art/music/*.mml`) and compiled by

@@ -19,12 +19,15 @@ static void sell_menu(void) {
     while (1) {
         n = 0;
         for (it = 0; it < NUM_ITEMS && n < 10; it++) {
-            if (sell_filter && !(it >= I_COPPER && it <= I_GEM)) continue;
+            if (sell_filter && !IS_MINERAL(it)) continue;
             for (q = 0; q < 3 && n < 10; q++) {
                 if (!G.inv[it][q]) continue;
                 s_clr(); s_ch((char)(0x80 + it)); s_add(items[it].name);
                 if (q) s_ch(q == 2 ? (char)0xF1 : (char)0xF0);
-                s_pad(10); s_ch('x'); s_num(G.inv[it][q], 2); s_ch(' '); s_pad(14); s_num(item_value(it, q), 3);
+                {   // 4-digit prices (gems) start a column early, so the row still fits the 17 columns
+                    uint8_t wide = item_value(it, q) >= 1000;
+                    s_pad(wide ? 9 : 10); s_ch('x'); s_num(G.inv[it][q], 2); s_ch(' '); s_pad(wide ? 13 : 14); s_num(item_value(it, q), 3);
+                }
                 lbl_set(n); mi[n] = it; mq[n] = q; n++;
             }
         }
@@ -55,11 +58,12 @@ static void sell_menu(void) {
 
 // ---------------------------------------------------------------- general store (Rosa)
 // rarity: Rare packets cost 3x and yield 2; Legendary cost 8x, yield 3-4 at gold odds, and (like golden
-// animals) Rosa only stocks them for proven farmers: Year 2, or G20000 earned.
+// animals) Rosa only stocks them for proven farmers: Year 2, or LEGEND_EARNED earned (docs/BALANCE.md).
 static const uint8_t rar_mult[NUM_RARITY] = {1, 3, 8};
-static uint8_t legend_ok(void) { return G.year > 1 || G.earned >= 20000; }
+#define LEGEND_EARNED 250000UL
+static uint8_t legend_ok(void) { return G.year > 1 || G.earned >= LEGEND_EARNED; }
 static void legend_locked(void) {
-    ui_dialog("The legendary stock is for proven farmers. Earn G20000 or come back next year, and it's yours!");
+    ui_dialog("The legendary stock is for proven farmers. Earn G250000 or come back next year, and it's yours!");
 }
 static const char *const tier_items[NUM_RARITY] = {"Common", "Rare  x3", "Legend x8"};
 
@@ -116,7 +120,7 @@ static uint8_t animal_count(uint8_t kind, uint8_t *home) {
     return 0;
 }
 
-static const uint16_t breed_price[3][NUM_RARITY] = {{1500, 4500, 12000}, {400, 1200, 3200}, {1800, 5400, 14400}};
+static const uint16_t breed_price[3][NUM_RARITY] = {{1500, 4500, 6500}, {400, 1200, 1700}, {1800, 5400, 7800}};
 static const char *const breed_names[3][NUM_RARITY] = {{"Holstein", "Jersey", "Golden"}, {"White", "Brown", "Golden"}, {"Merino", "Cocoa", "Golden"}};
 static const char *const breed_pet[3][NUM_RARITY] = {{"Daisy", "Mocha", "Goldy"}, {"Penny", "Hazel", "Sunny"}, {"Wooly", "Cocoa", "Midas"}};
 static const char *const breed_tip[3][2] = {
@@ -160,13 +164,23 @@ static void buy_animal(uint8_t kind) {
 }
 
 static const char *const store_items[8] = {"Seeds", "Fertilizer", "Hay", "Cows", "Hens", "Sheep", "Sell", "Bye"};
+// with a stable and no horse yet, Rosa can find you one (horse.c)
+static const char *const store_items_h[9] = {"Seeds", "Fertilizer", "Hay", "Cows", "Hens", "Sheep", "Horse", "Sell", "Bye"};
+// a prosperous town (invest.c, level 2+) brings traders: Rosa adds their goods before Sell
+static const char *const store_items_g[9] = {"Seeds", "Fertilizer", "Hay", "Cows", "Hens", "Sheep", "Goods", "Sell", "Bye"};
+static const char *const store_items_hg[10] = {"Seeds", "Fertilizer", "Hay", "Cows", "Hens", "Sheep", "Horse", "Goods", "Sell", "Bye"};
 static void store(void) {
     uint8_t r, q;
     set_speaker("Rosa");
     say("Welcome to the General Store! Seeds for every season, and I'll buy whatever you grow.");
     while (1) {
+        uint8_t hs = !G.horse && bld_find(B_STABLE) != 0xFF, gd = prosperity() >= 2;
         ui_begin(); ui_money();
-        r = ui_menu(0, 0, 13, store_items, 8, 0);
+        r = ui_menu(0, 0, 13, gd ? (hs ? store_items_hg : store_items_g) : (hs ? store_items_h : store_items), 8 + hs + gd, 0);
+        if (hs && r == 6) { horse_shop(); ui_end(); continue; }
+        if (hs && r > 6 && r != 0xFF) r--;
+        if (gd && r == 6) { invest_store(); ui_end(); continue; }
+        if (gd && r > 6 && r != 0xFF) r--;
         switch (r) {
         case 0: buy_seeds(); break;
         case 1:
@@ -190,10 +204,10 @@ static void store(void) {
 // ---------------------------------------------------------------- blacksmith (Brick)
 static const char *const tt_names[NUM_TT] = {"Hoe", "Water Can", "Axe", "Hammer", "Fishing Rod"};   // fit the price list
 static const char *const tier_word[4] = {"Basic", "Copper", "Iron", "Gold"};
-static const uint16_t tier_gold[3] = {2000, 5000, 12000};
+static const uint16_t tier_gold[3] = {3000, 10000, 25000};
 
 static void smith(void) {
-    static const char *const sm[3] = {"Upgrade", "Sell Ore", "Bye"};
+    static const char *const sm[3] = {"Upgrade", "Sell Ore", "Bye"};   // ore, coal and gems
     uint8_t r, k, t, up = 0xFF;
     set_speaker("Brick");
     say("Brick's Forge. Bring me ore and coin and I'll make your tools sing.");
@@ -219,7 +233,7 @@ static void smith(void) {
                     s_clr(); s_add("Make it "); s_add(tier_word[t + 1]); s_add("?\nG"); s_num(tier_gold[t], 0); s_add(" + 5 "); s_add(items[ore].name);
                     if (ui_yesno(sbuf)) {
                         refresh();   // drop the YES/NO box before Brick answers
-                        if (G.gold < tier_gold[t] || inv_count(ore) < 5) ui_dialog("You'll need more than that. Ore comes from the quarry and the hollow.");
+                        if (G.gold < tier_gold[t] || inv_count(ore) < 5) ui_dialog("You'll need more than that. Ore comes from the quarry, and the mine up the west road.");
                         else {
                             G.gold -= tier_gold[t]; inv_take(ore, 5); G.tier[r]++;
                             music_play(MUS_JINGLE_FANFARE);
@@ -337,10 +351,13 @@ static void cafe(void) {
         refresh();   // Ada's name tab would cover "Bye" while she answers
         if (r < 3) {
             if (G.gold < price[r]) ui_dialog("Maybe next time, hon.");
+            else if (G.ate >= G.energy_max) ui_dialog("You've eaten plenty today, hon. Get some sleep!");   // one bar a day
             else {
                 uint16_t e = (uint16_t)G.energy + energy[r];
                 G.gold -= price[r];
-                G.energy = e > G.energy_max ? G.energy_max : (uint8_t)e;
+                if (e > G.energy_max) e = G.energy_max;
+                G.ate = (uint16_t)G.ate + (e - G.energy) > 255 ? 255 : G.ate + (uint8_t)(e - G.energy);
+                G.energy = (uint8_t)e;
                 sfx(SFX_COIN);
                 hud_draw();
                 ui_dialog(r == 0 ? "Fresh brewed. You feel more awake!" : r == 1 ? "A hearty lunch. Energy restored!" : "A full feast! You feel brand new!");
@@ -351,22 +368,67 @@ static void cafe(void) {
 }
 
 // ---------------------------------------------------------------- land office
-static void realtor(void) {
-    uint8_t p, n = 0, map[16], r;
-    set_speaker("Land Office");
-    for (p = 0; p < 16 && n < 12; p++) {
-        if (G.plots & ((uint16_t)1 << p)) continue;
-        uint8_t i, len;   // name (clipped) + price must fit the 17 columns inside the box
-        s_clr(); s_num(plot_price(p), 0); len = s_len(); strcpy(lbl[13], sbuf);
-        s_clr(); plot_name_add(p); strcpy(lbl[12], sbuf);
-        s_clr(); for (i = 0; i < 16 - len && lbl[12][i]; i++) s_ch(lbl[12][i]);
-        s_pad(17 - len); s_add(lbl[13]);
-        lbl_set(n); map[n++] = p;
+// Up to 10 plots for sale, those bordering your land first. Each row shows the plot's full name and, for a
+// region spanning several plots, which part of it this is ("Granite Ridge NW" / "NE" / "SW"); the panel
+// underneath gives the price and where it lies from your home field.
+#define LAND_ROWS 10
+static int8_t plot_dx(uint8_t p) { uint8_t x = p & 7; return x < 3 ? -(int8_t)(3 - x) : x > 4 ? (int8_t)(x - 4) : 0; }
+static int8_t plot_dy(uint8_t p) { uint8_t y = p >> 3; return y < 3 ? -(int8_t)(3 - y) : y > 4 ? (int8_t)(y - 4) : 0; }
+
+// a region spanning several plots: N/S, W/E (or both) for this plot's part of it
+static void region_part(uint8_t p) {
+    uint8_t q, r = plot_region(p), x0 = 7, x1 = 0, y0 = 7, y1 = 0, x = p & 7, y = p >> 3;
+    for (q = 0; q < NUM_PLOTS; q++) {
+        if (plot_region(q) != r) continue;
+        if ((q & 7) < x0) x0 = q & 7;
+        if ((q & 7) > x1) x1 = q & 7;
+        if ((q >> 3) < y0) y0 = q >> 3;
+        if ((q >> 3) > y1) y1 = q >> 3;
     }
+    if (y1 > y0 && y == y0) s_ch('N');
+    if (y1 > y0 && y == y1) s_ch('S');
+    if (x1 > x0 && x == x0) s_ch('W');
+    if (x1 > x0 && x == x1) s_ch('E');
+}
+
+static void land_panel(uint8_t p) {
+    int8_t dx = plot_dx(p), dy = plot_dy(p);
+    ui_panel(0, 12, 20, 5);
+    s_clr(); s_add("Price G"); s_num(plot_price(p), 0);
+    ui_text(1, 13, sbuf);
+    s_clr();
+    if (dx) { s_num(dx < 0 ? -dx : dx, 0); s_add(dx < 0 ? " west" : " east"); }
+    if (dx && dy) s_add(", ");
+    if (dy) { s_num(dy < 0 ? -dy : dy, 0); s_add(dy < 0 ? " north" : " south"); }
+    s_add(" of home");
+    ui_text(1, 15, sbuf);
+}
+
+static void realtor(void) {
+    uint8_t p, n = 0, map[LAND_ROWS], r, pass, hv = 0;
+    if (invest_realtor()) return;   // invest.c: Market Street (once the town has some prosperity)
+    set_speaker("Land Office");
+    for (pass = 0; pass < 2; pass++)
+        for (p = 0; p < NUM_PLOTS && n < LAND_ROWS; p++) {
+            uint8_t x = (p & 7) << 3, y = (p >> 3) << 3, near;
+            if (PLOT_OWNED(p)) continue;
+            near = (x && owned(x - 8, y)) || (x < WW - 8 && owned(x + 8, y)) ||
+                   (y && owned(x, y - 8)) || (y < WH - 8 && owned(x, y + 8));
+            if (near != !pass) continue;
+            s_clr(); plot_name_add(p); s_pad(15);   // full name (up to 15), then which part of the region
+            region_part(p);
+            lbl_set(n); map[n++] = p;
+        }
     if (!n) { say("You own every acre around! What a farm."); ui_speaker = 0; return; }
     say("Land for sale all around your farm! Woods, a lake, a river, a quarry... pick a plot.");
-    ui_begin(); ui_money();
-    r = ui_menu(0, 3, 20, lp, n, 0);
+    ui_begin();   // (the HUD shows your gold; the list needs the full width)
+    ui_hover = &hv;
+    while (1) {
+        land_panel(map[hv < n ? hv : 0]);
+        r = ui_menu(0, 0, 20, lp, n, hv);
+        if (r != 0xFE) break;
+    }
+    ui_hover = 0;
     ui_end();
     if (r != 0xFF) buy_plot_prompt(map[r]);
     ui_speaker = 0;
@@ -377,7 +439,7 @@ static const char *const lines[NUM_NPC][3] = {
     {"Rain or shine, the seeds keep coming in. What are you planting this season?",
      "Your farm's the talk of the town! People say you've got a green thumb.",
      "You know, your grandpa used to buy his seeds right here. He'd be so proud."},
-    {"Hmph. Ore from the quarry makes the best tools. Bring me some.",
+    {"Hmph. Ore from the quarry or the mine makes the best tools. Bring me some.",
      "That hammer of yours could use some love. Come by the forge.",
      "You're alright, farmer. Most folks don't work this hard."},
     {"Every good farm starts with a good fence. And a good plan!",
@@ -394,29 +456,44 @@ static const char *const lines[NUM_NPC][3] = {
      "When I grow up I'm gonna have a farm just like yours!"}};
 
 static uint8_t loves(uint8_t npc, uint8_t it) {
+    if (IS_DISH(it)) return 1;   // everyone loves a home-cooked dish
     switch (npc) {
-    case NPC_ROSA: return it == I_SUNFLOWER || it == I_HERB || it == I_STRAWB;
-    case NPC_BRICK: return it >= I_COPPER && it <= I_GEM;
-    case NPC_JUNE: return it == I_CIDER || it == I_APPLE || it == I_CORN;
+    case NPC_ROSA: return it == I_SUNFLOWER || it == I_HERB || it == I_STRAWB || it == I_CORAL;
+    case NPC_BRICK: return IS_MINERAL(it);
+    case NPC_JUNE: return it == I_CIDER || it == I_APPLE || it == I_CORN || it == I_DRIFTWOOD;
     case NPC_ADA: return it == I_MILK || it == I_EGG || it == I_CHEESE || it == I_BERRIES;
     case NPC_HOLLIS: return it == I_PUMPKIN || it == I_HONEY || it == I_JAM;
-    default: return it >= I_MINNOW && it <= I_KOI;
+    default: return IS_FISH(it) || it == I_SHELL || it == I_SEAGLASS;
     }
 }
 
 
+// town life: on their birthday they say so, and a gift counts double
+static const char *const bday_lines[NUM_NPC] = {
+    "It's my birthday today, dear! Don't tell anyone how old. I've stopped counting at 39.",
+    "...Who told you it's my birthday? Hmph. Thanks.",
+    "It's my BIRTHDAY! I'm building myself a cake. Out of wood. It's a metaphor!",
+    "Birthday today, hon. Milo made me breakfast. Mostly eggshell. Best one ever.",
+    "Another year older today! Your grandpa always sent a pumpkin on my birthday.",
+    "It's my BIRTHDAY! I'm EIGHT! Almost nine! Almost ten! Then I get a DOG!"};
+
 void npc_talk(uint8_t npc) BANKED {
-    uint8_t h = G.friend[npc] / 50, it;
+    uint8_t h = G.friend[npc] / 50, it, bday = tl_birthday(npc);
     set_speaker(npc_names[npc]);
     if (!(G.talked & (1 << npc))) {
         G.talked |= 1 << npc;
         if (G.friend[npc] < 253) G.friend[npc] += 2;
     }
-    say(lines[npc][h >= 3 ? 2 : h >= 1 ? 1 : (rnd() & 1) ? 0 : 1]);
-    if (!(G.gifted & (1 << npc)) && ui_yesno("Give a gift?")) {
+    if (scene == MAP_TOWN && tl_heart_try(npc, 0)) { ui_speaker = 0; return; }   // a heart event is due: it plays instead
+    set_speaker(npc_names[npc]);
+    if (bday) say(bday_lines[npc]);
+    else if (scene == MAP_BEACH) say("Weekends are for the beach! Someday I'm gonna catch a tuna off the end of the pier.");
+    else if (!invest_line(npc)) say(lines[npc][h >= 3 ? 2 : h >= 1 ? 1 : (rnd() & 1) ? 0 : 1]);   // invest.c: a busy town
+    cook_friend(npc);   // cooking.c: at 2 hearts they share a recipe
+    if (!(G.gifted & (1 << npc)) && ui_yesno(bday ? "Give a birthday gift?" : "Give a gift?")) {
         it = ui_pick_item(PICK_ANY);
         if (it != 0xFF) {
-            uint8_t l = loves(npc, it), add = l ? 12 : 4;
+            uint8_t l = loves(npc, it), add = (l ? 12 : 4) << bday;
             inv_take(it, 1);
             G.gifted |= 1 << npc;
             G.friend[npc] = (uint16_t)G.friend[npc] + add > 250 ? 250 : G.friend[npc] + add;
@@ -428,18 +505,22 @@ void npc_talk(uint8_t npc) BANKED {
 }
 
 void town_act(uint8_t act) BANKED {
+    if (!tl_shop_open(act)) { tl_closed_sign(act); return; }   // town life: counters keep their owners' hours
     switch (act) {
+    case ACT_HOUSE: tl_house(); break;
     case ACT_STORE: store(); break;
     case ACT_SMITH: smith(); break;
     case ACT_CARPENTER: carpenter(); break;
     case ACT_CAFE: cafe(); break;
     case ACT_REALTOR: realtor(); break;
-    case ACT_HALL: if (staff_hall()) hall_act(); break;
+    case ACT_HALL: staff_hall(); break;
     case ACT_BOARD: board_act(); break;
     case ACT_BAKERY: biz_act(0); break;
     case ACT_JUICEBAR: biz_act(1); break;
     case ACT_CREAMERY: biz_act(2); break;
     case ACT_FLORIST: biz_act(3); break;
+    case ACT_GATE: case ACT_LOT0: case ACT_LOT1: case ACT_LOT2: case ACT_LOT3:   // Market Street (invest.c)
+    case ACT_PLAYGROUND: case ACT_GARDEN: case ACT_BANDSTAND: case ACT_LIBRARY: invest_act(act); break;
     case ACT_FOUNTAIN:
         if (G.gold >= 10 && ui_yesno("Toss a coin in the fountain and make a wish? (G10)")) {
             G.gold -= 10;

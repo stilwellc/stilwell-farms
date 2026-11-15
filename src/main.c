@@ -4,6 +4,7 @@
 #include <string.h>
 #include "game.h"
 #include "decor.h"
+#include "designer.h"
 
 GameState G;
 uint8_t joy, joy_prev, joy_press;
@@ -23,9 +24,64 @@ void wait_frames(uint8_t n) {
 }
 
 static const uint8_t bit8[8] = {1, 2, 4, 8, 16, 32, 64, 128};
-uint8_t owned(uint8_t x, uint8_t y) {   // byte + mask lookup (a variable 16-bit shift is a slow loop)
-    uint8_t p = PLOT_OF(x, y);
-    return (((const uint8_t *)&G.plots)[p >> 3] & bit8[p & 7]) ? 1 : 0;
+uint8_t owned(uint8_t x, uint8_t y) {   // byte + mask lookup (a variable shift is a slow loop)
+    return (G.plots[y >> 3] & bit8[x >> 3]) ? 1 : 0;
+}
+
+// Cell scanner for the nightly passes (scan_types / scan_add in world.c pick the cell types): SDCC's
+// loops over a span cost ~50 cycles a cell (every local on the stack); this one is 15. scan_tab is a
+// 32-byte table, 32-aligned (so table + type never carries out of the low byte).
+uint8_t *scan_tab;
+// the first cell from p (n cells, n > 0 or not) whose type is wanted, else p + n: de = p, a = n
+uint8_t *scan_cells(uint8_t *p, uint8_t n) __naked {
+    (void)p; (void)n;
+    __asm
+        or   a, a
+        jr   z, 53$
+        ld   b, a
+        ld   h, d
+        ld   l, e
+        ld   a, (_scan_tab + 1)
+        ld   d, a
+        ld   a, (_scan_tab)
+        ld   c, a
+    50$:
+        ld   a, (hl+)
+        and  a, #31
+        or   a, c
+        ld   e, a
+        ld   a, (de)
+        or   a, a
+        jr   nz, 52$
+        dec  b
+        jr   nz, 50$
+        ld   b, h
+        ld   c, l
+        ret
+    52$:
+        dec  hl
+        ld   b, h
+        ld   c, l
+        ret
+    53$:
+        ld   b, d
+        ld   c, e
+        ret
+    __endasm;
+}
+
+// a2 lives in its own SRAM bank: map it for one access, then put the live bank (cell/a1) back
+uint8_t w_a2(uint16_t i) {
+    uint8_t v;
+    SWITCH_RAM(WB_A2);
+    v = ((volatile uint8_t *)0xA000)[i];
+    SWITCH_RAM(WB_LIVE);
+    return v;
+}
+void w_a2_set(uint16_t i, uint8_t v) {
+    SWITCH_RAM(WB_A2);
+    ((volatile uint8_t *)0xA000)[i] = v;
+    SWITCH_RAM(WB_LIVE);
 }
 
 uint8_t rnd(void) {   // xorshift16 (7, 9, 8) done bytewise: the 16-bit shifts compiled to slow loops
@@ -42,7 +98,7 @@ uint8_t rnd(void) {   // xorshift16 (7, 9, 8) done bytewise: the 16-bit shifts c
 }
 
 // ---------------------------------------------------------------- palettes
-static uint16_t pbuf[32];
+uint16_t pbuf[32];
 static uint8_t cur_tint = 0xFF, cur_fade, cur_season = 0xFF;
 
 // Tint and fade scale each 5-bit channel by k/16. Per push that is 192 multiplies, which as C
@@ -57,8 +113,9 @@ static void ramp(uint8_t *t, uint8_t k) {   // t[v] = (v * k) >> 4, k <= 16: at 
         if (rem >= 16) { rem -= 16; q++; }
     }
 }
-//                                       r   g   b  +b   (tint 0 none, 1 dusk, 2 night, 3 rain, 4 storm)
-static const uint8_t tint_k[5][4] = {{16, 16, 16, 0}, {15, 12, 9, 0}, {6, 7, 10, 4}, {12, 12, 13, 1}, {9, 9, 11, 2}};
+//                                       r   g   b  +b   (tint 0 none, 1 dusk, 2 night, 3 rain, 4 storm, 5 mine lantern, 6 deep mine)
+static const uint8_t tint_k[7][4] = {{16, 16, 16, 0}, {15, 12, 9, 0}, {6, 7, 10, 4}, {12, 12, 13, 1}, {9, 9, 11, 2},
+                                     {15, 12, 9, 0}, {10, 10, 13, 2}};
 
 static void pal_ramps(uint8_t tint, uint8_t fade) {
     uint8_t v, off = tint_k[tint][3];
@@ -73,13 +130,13 @@ static void pal_ramps(uint8_t tint, uint8_t fade) {
     }
 }
 
-static void pal_build(const uint16_t *src, uint8_t skip_ui) {   // UI palette (7): fade only
+static void pal_build(const uint16_t *src, uint8_t cnt, uint8_t ui_at) {   // entries from ui_at on (UI palette): fade only
     uint8_t n;
     const uint8_t *s = (const uint8_t *)src, *tr = ramp_r, *tg = ramp_g, *tb = ramp_b;
     uint8_t *d = (uint8_t *)pbuf;
-    for (n = 0; n < 32; n++) {
+    for (n = 0; n < cnt; n++) {
         uint8_t lo, hi, r, g, b;
-        if (n == PAL_UI * 4 && skip_ui) tr = tg = tb = ramp_f;
+        if (n == ui_at) tr = tg = tb = ramp_f;
         lo = *s++; hi = *s++;                  // 0bbbbbgg gggrrrrr
         r = tr[lo & 31];
         g = tg[(uint8_t)(lo >> 5) | (uint8_t)((hi & 3) << 3)];
@@ -90,6 +147,7 @@ static void pal_build(const uint16_t *src, uint8_t skip_ui) {   // UI palette (7
 }
 
 static uint8_t want_tint(void) {
+    if (IS_MINE(scene)) return G.mine_floor >= 10 ? 6 : 5;            // lantern light; colder and darker deep down
     if (IS_INTERIOR(scene)) return G.time >= 1050 || G.time < 300;   // lamplight indoors
     if (G.time >= 1200 || G.time < 300) return 2;
     if (G.time >= 1050) return 1;
@@ -98,11 +156,27 @@ static uint8_t want_tint(void) {
     return 0;
 }
 
+// no crops grow in the mine or on the beach, so those scenes recolour the crop palette:
+// amethyst + emerald crystals underground, cream sand + palm fronds by the sea. The stone palette is
+// matched to the ground too: its darkest colour to the dark cave floor, its lightest to the sand, so
+// grey rocks, tide pools and sea glass sit on the ground without a box around them.
+static const uint16_t area_pal[16] = {0x7EDB, 0x6972, 0x3B0A, 0x0865,    // mine: crop
+                                      0x7FFF, 0x6717, 0x4DEE, 0x0865,    // mine: stone
+                                      0x6FDF, 0x19B5, 0x22CB, 0x14E3,    // beach: crop
+                                      0x6FDF, 0x6717, 0x4DEE, 0x1CA4};   // beach: stone
+
 static void pal_push(uint8_t tint, uint8_t fade) {
+    const uint16_t *src = season_pal[G.season & 3];
     pal_ramps(tint, fade);
-    pal_build(season_pal[G.season & 3], 1);
+    if (scene == SCENE_FARM) { memcpy(pbuf, src, 64); accent_patch(); src = pbuf; }   // farm colours (built in place)
+    pal_build(src, 32, PAL_UI * 4);
     set_bkg_palette(0, 8, pbuf);
-    pal_build(obj_pal_base, 0);
+    if (IS_AREA(scene)) {
+        pal_build(area_pal + (scene == MAP_BEACH ? 8 : 0), 8, 0xFF);
+        set_bkg_palette(PAL_CROP, 1, pbuf);
+        set_bkg_palette(PAL_STONE, 1, pbuf + 4);
+    }
+    pal_build(obj_pal_base, 32, 0xFF);
     set_sprite_palette(0, 8, pbuf);
 }
 
@@ -112,6 +186,11 @@ void apply_palettes(void) {
         cur_tint = t; cur_fade = 0; cur_season = G.season;
         pal_push(t, 0);
     }
+}
+
+void pal_refresh(void) {   // push again now (the colour picker's live preview)
+    cur_tint = 0xFF;
+    apply_palettes();
 }
 
 void fade_out(void) {
@@ -144,9 +223,12 @@ void music_for_scene(void) {
     if (scene == SCENE_FARM || IS_INTERIOR(scene)) {
         if (G.time >= 1200) want = MUS_NIGHT;
         else want = G.season == 0 ? MUS_SPRING : G.season == 1 ? MUS_SUMMER : G.season == 2 ? MUS_FALL : MUS_WINTER;
+    } else if (IS_AREA(scene)) {
+        want = sc_music;   // the mine and the beach have their own tunes (map music=)
     } else {
         want = (G.day == 14 || (G.season == SEASON_WINTER && G.day == 25)) ? MUS_FESTIVAL : MUS_TOWN;
     }
+    if (music_on && want == music_cur) return;   // same song (farm <-> house): keep playing, no restart
     music_play(want);
 }
 
@@ -175,7 +257,7 @@ void hud_flash(const char *s) {
 
 // ---------------------------------------------------------------- sprites
 // OAM: 0-1 player, 2-3 fx, 4-5 smoke, 6-21 actors, 22-39 build cursor / weather
-static uint16_t ppx, ppy;
+uint16_t ppx, ppy;   // pixel position (horse.c sets it when mounting / dismounting)
 static uint8_t walk_frame, step_count, pose, pose_timer;
 static uint8_t fx_timer, fx_tile, fx_pal, fx_x, fx_y;
 static uint8_t wx[6], wy[6];
@@ -219,6 +301,7 @@ static const uint8_t pose_tiles[3][3] = {
 static void draw_player(void) {
     uint8_t t, flip = 0, d = G.facing;
     int16_t sx = (int16_t)ppx - scx, sy = (int16_t)ppy - scy - 2;
+    if (riding) { ride_draw(sx, sy); return; }   // horse.c / actors.c: the horse and the rider
     if (pose_timer && pose) {
         if (pose == 1) { put16(0, sx, sy, SPR_PL_HOLD, SPR_PL_HOLD_PAL, 0); return; }
         t = pose_tiles[pose - 2][d == D_RIGHT ? 2 : d];
@@ -235,11 +318,12 @@ static void draw_player(void) {
 }
 
 static void draw_cursor(void) {
-    uint8_t x0, y0, w, h, ok, i, j, n = 0;
+    uint8_t x0, y0, w, h, ok, i, j, n = 0, si = 1, sj = 1;
     ok = build_cursor(&x0, &y0, &w, &h);
     if ((sys_time & 16) || w == 0) { for (i = 22; i < 40; i += 2) hide16(i); return; }
-    for (j = 0; j < h; j++)
-        for (i = 0; i < w && n < 9; i++, n++)
+    if (w > 3 || h > 3) { if (w > 1) si = w - 1; if (h > 1) sj = h - 1; }   // a big area (blueprints): corners only
+    for (j = 0; j < h; j += sj)
+        for (i = 0; i < w && n < 9; i += si, n++)
             put16(22 + n * 2, (int16_t)((x0 + i) * 16) - scx, (int16_t)((y0 + j) * 16) - scy, SPR_CURSOR,
                   ok ? SPR_CURSOR_PAL : SPR_DROP_PAL, 0);
     for (; n < 9; n++) hide16(22 + n * 2);
@@ -268,8 +352,8 @@ void update_sprites(void) {
         uint8_t k;
         for (k = 0; k < MAX_BLD; k++)
             if (G.bld[k].type == B_HOUSE) {
-                uint8_t ph = (sys_time >> 2) & 31;
-                put16(4, (int16_t)(G.bld[k].x * 16 + 30) - scx + (ph >> 3), (int16_t)(G.bld[k].y * 16) - scy - 6 - ph,
+                uint8_t ph = (sys_time >> 2) & 31, l0 = !(G.bld[k].flags & BF_LVL);   // the shack: out of its roof hatch
+                put16(4, (int16_t)(G.bld[k].x * 16 + (l0 ? 20 : 30)) - scx + (ph >> 3), (int16_t)(G.bld[k].y * 16 + (l0 ? 7 : -6)) - scy - ph,
                       SPR_SMOKE, SPR_SMOKE_PAL, 0);
                 break;
             }
@@ -300,15 +384,31 @@ static void camera(void) {
     view_update();
 }
 
+// The LCD is off while a scene loads, and with it the VBlank interrupt that ticks the music: the song
+// froze for the whole load (~10 frames). The timer interrupt stands in meanwhile, at the frame rate
+// (TAC 4096 Hz input, 8192 Hz at double speed; / 137 = 59.8 Hz).
+static void load_music_on(void) {
+    TMA_REG = TIMA_REG = 256 - 137;
+    TAC_REG = 0x04;
+    set_interrupts(VBL_IFLAG | TIM_IFLAG);
+}
+static void load_music_off(void) {
+    set_interrupts(VBL_IFLAG);
+    TAC_REG = 0;
+}
+
 void enter_scene(uint8_t sc, uint8_t x, uint8_t y, uint8_t facing) {
     fade_out();
     DISPLAY_OFF;
+    load_music_on();
     hide_sprites();
+    undo_clear();
     scene = sc;
     G.scene = sc;
     if (sc == SCENE_FARM) { view_w = WW; view_h = WH; }
     else { map_select(sc); view_w = sc_w; view_h = sc_h; }
     G.px = x; G.py = y; G.facing = facing;
+    if (IS_AREA(sc)) area_enter();   // mine floor rocks / today's beach finds, before anything is drawn
     ppx = G.px * 16; ppy = G.py * 16;
     walk_frame = 0; pose_timer = 0;
     clamp_cam((int16_t)ppx - 72, (int16_t)ppy - 64);
@@ -320,6 +420,7 @@ void enter_scene(uint8_t sc, uint8_t x, uint8_t y, uint8_t facing) {
     SHOW_BKG; SHOW_WIN; SHOW_SPRITES;
     hud_draw_row(0);
     update_sprites();
+    load_music_off();
     DISPLAY_ON;
     music_for_scene();
     fade_in();
@@ -337,7 +438,7 @@ uint8_t front_cell(uint8_t *ox, uint8_t *oy) {
     else if (G.facing == D_UP) y--;
     else if (G.facing == D_LEFT) x--;
     else x++;
-    if (x < 0 || y < 0 || x >= view_w || y >= view_h) return 0;
+    if (x < 0 || y < 0 || (uint8_t)x >= view_w || (uint8_t)y >= view_h) return 0;
     *ox = x; *oy = y;
     return 1;
 }
@@ -348,11 +449,14 @@ uint8_t walkable(uint8_t x, uint8_t y) {
     if (x >= view_w || y >= view_h) return 0;
     if (actor_at(x, y) != 0xFF) return 0;
     i = WIDX(x, y);
-    if (scene != SCENE_FARM) return IS_INTERIOR(scene) ? interior_walk(x, y) : (map_kind(i) & K_WALK);
-    c = G.cell[i];
+    if (scene != SCENE_FARM) {
+        if (scene == MAP_TOWN && y >= MK_GATE_Y && !(G.mk_flags & MK_OPEN)) return 0;   // Market Street: not bought yet
+        return IS_INTERIOR(scene) ? interior_walk(x, y) : IS_AREA(scene) ? area_walk(x, y) : (map_kind(MIDX(x, y)) & K_WALK);
+    }
+    c = W_CELL[i];
     if (c == C_ROAD) return 1;
     if (!owned(x, y)) return 0;
-    if (c == C_DECOR) return decor[G.a1[i]].walk;
+    if (c == C_DECOR) return decor[W_A1[i]].walk;
     return c == C_GRASS || c == C_GRASS2 || c == C_WILDFLOWER || c == C_DIRT || c == C_SOIL || c == C_SAND;
 }
 
@@ -360,7 +464,7 @@ static void check_warp(void) {
     uint8_t k;
     if (scene == SCENE_FARM) {
         if (G.py == WH - 1 && G.facing == D_DOWN && (G.px == ROAD_X || G.px == ROAD_X + 1)) {
-            enter_scene(MAP_TOWN, G.px, 1, D_DOWN);
+            enter_scene(MAP_TOWN, G.px - (ROAD_X - TOWN_ROAD_X), 1, D_DOWN);
             if (!(G.tips & 2)) { G.tips |= 2; say("Welcome to town! Walk up to a shop door and press A."); }
         }
         return;
@@ -378,11 +482,13 @@ static void act(void) {
     uint8_t x, y, k, a;
     if (scene == SCENE_FARM) { farm_act(); return; }
     if (IS_INTERIOR(scene)) { interior_act(); return; }
+    if (IS_AREA(scene)) { area_act(); return; }
     if (!front_cell(&x, &y)) return;
     a = actor_at(x, y);
     if (a != 0xFF && actor_npc(a) != 0xFF) { npc_talk(actor_npc(a)); return; }
     for (k = 0; k < sc_nacts; k++)
         if (sc_acts[k].x == x && sc_acts[k].y == y) { town_act(sc_acts[k].act); return; }
+    if (fest_on) festival_poke(x, y);   // town life: the egg hunt searches flowerbeds, trees, benches...
 }
 
 // ---------------------------------------------------------------- clock
@@ -407,10 +513,11 @@ static void field_loop(void) {
     int8_t dx = 0, dy = 0;
     while (1) {
         read_input();
+        if (paint_on && !(joy & J_A)) paint_end();
         if (pose_timer) pose_timer--;
         if (moving) {
             uint8_t run = G.opt_run ? !(joy & J_B) : (joy & J_B);
-            speed = run ? 4 : 2;
+            speed = (run || riding || (G.buff & BUFF_SPEED)) ? 4 : 2;   // on horseback / Brisk dish: twice walking speed
             if (speed > moving) speed = moving;
             ppx += dx * speed; ppy += dy * speed;
             moving -= speed;
@@ -422,6 +529,7 @@ static void field_loop(void) {
                 check_warp();
                 if ((joy & J_A) && scene == SCENE_FARM && !building &&
                     (G.tool == T_HOE || G.tool == T_CAN || G.tool == T_SEEDS || G.tool == T_FERT)) farm_act();
+                else if (paint_on) paint_step(G.px - dx, G.py - dy);   // build paint stroke: the cell just left
             }
         } else if (!pose_timer) {
             uint8_t d = 0xFF;
@@ -442,7 +550,7 @@ static void field_loop(void) {
                 continue;
             } else if (joy_press & J_SELECT) {
                 sfx(SFX_CURSOR);
-                if (building) { build_cancel(); hud_draw(); }
+                if (building) { build_select(); hud_draw(); }
                 else { G.tool = (G.tool + 1) % NUM_TOOLS; tool_toast(); }
             } else if (joy_press & J_A) {
                 if (building) build_place();
@@ -452,6 +560,8 @@ static void field_loop(void) {
             } else if ((joy_press & J_B) && building) {
                 build_cancel();
                 hud_draw();
+            } else if ((joy_press & J_B) && riding) {
+                horse_dismount();
             } else if (d != 0xFF) {
                 if (d != G.facing) {
                     G.facing = d;
@@ -468,7 +578,9 @@ static void field_loop(void) {
                     tx += dx; ty += dy;
                     if (scene == SCENE_FARM && d == D_DOWN && G.py == WH - 1) { check_warp(); continue; }
                     if (!(tx >= 0 && ty >= 0 && walkable(tx, ty))) {
-                        if (joy_press & (J_UP | J_DOWN | J_LEFT | J_RIGHT)) sfx(SFX_BUMP);
+                        if (paint_on) paint_bump();   // the eraser clears what is in the way
+                        else if (scene == SCENE_FARM && !building && door_bump(tx, ty)) continue;   // barn.c: in the door
+                        else if (joy_press & (J_UP | J_DOWN | J_LEFT | J_RIGHT)) sfx(SFX_BUMP);
                     } else {
                         moving = 16;
                         step_count++;
@@ -499,7 +611,9 @@ void main(void) {
     HIDE_WIN;
     hide_sprites();
     G.opt_music = G.opt_sfx = 1;
-    CRITICAL { add_VBL(scroll_vbl); add_VBL(music_tick); }
+    ENABLE_RAM;
+    SWITCH_RAM(WB_LIVE);               // the live farm world stays mapped from here on (see game.h)
+    CRITICAL { add_VBL(scroll_vbl); add_VBL(music_tick); add_TIM(music_tick); }
     set_interrupts(VBL_IFLAG);
     enable_interrupts();
     DISPLAY_ON;

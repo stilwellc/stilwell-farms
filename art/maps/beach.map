@@ -1,0 +1,45 @@
+# The beach: east along the south road from town. Dune grass and palms under the tree line, the beach shack
+# (its tide board says what's biting), tide pools in the rocks, wet sand, and a pier out into the sea.
+# Shells, coral, sea glass and driftwood wash up each morning on a few spots (beach.c); fish off the shore or the pier.
+map BEACH set=BEACH w=24 h=18 music=BEACH
+key F FOREST block
+key " BEACH_DUNE walk
+key . SAND walk
+key : BEACH_SAND2 walk
+key = DIRT walk
+key w BEACH_WETSAND walk
+key ~ BEACH_SHORE water
+key W WATER_15 water
+key | BEACH_PIER walk
+key ! BEACH_PIER_END walk
+key r BEACH_ROCK block
+key t BEACH_TIDEPOOL block
+key u BEACH_UMBRELLA block
+grid
+FFFFFFFFFFFFFFFFFFFFFFFF
+F""""""""""""""""""""""F
+F""""""""""""""""""""""F
+F""..................""F
+F....:..........:......F
+==.......:.............F
+F.....u........:.......F
+F:...............rtr...F
+F............:.....rtr.F
+wwwwwwwwwwwwwwwwwwwwwwww
+~~~~~~~~~~~~~~~|~~~~~~~~
+WWWWWWWWWWWWWWW|WWWWWWWW
+WWWWWWWWWWWWWWW|WWWWWWWW
+WWWWWWWWWWWWWWW|WWWWWWWW
+WWWWWWWWWWWWWWW|WWWWWWWW
+WWWWWWWWWWWWWWW!WWWWWWWW
+WWWWWWWWWWWWWWWWWWWWWWWW
+WWWWWWWWWWWWWWWWWWWWWWWW
+place BEACH_PALM 2 1
+place BEACH_PALM 7 1
+place BEACH_PALM 17 1
+place BEACH_PALM 21 1
+place BEACH_PALM 13 5
+place BEACH_SHACK 11 1 act=SHACK
+act 18 7 TIDEPOOL
+act 20 8 TIDEPOOL
+warp 0 5 TOWN 30 15 left

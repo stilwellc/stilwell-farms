@@ -46,25 +46,27 @@ static uint8_t candidate(uint8_t role) {  // today's applicant for a role (disti
 uint8_t staff_hired(uint8_t role) BANKED { return role < NUM_ROLES && G.staff[role]; }
 
 // ---------------------------------------------------------------- wages
+static uint16_t c_soil, c_crop;   // tilled tiles, growing crops (one scan serves both roles' wages)
+static uint8_t c_ok;              // counts still valid: only during the night's payroll
+static void count_soil(void) {
+    uint16_t r;
+    uint8_t n, crop, *pc, *pe;
+    c_soil = c_crop = 0;
+    scan_types(C_SOIL, C_SOIL);
+    FOR_OWNED_CELLS(r, n, pc, pe) {   // soil is only ever on your land
+        crop = pc[0x1000] & SOIL_CROP;   // its a1 (W_A1 follows W_CELL)
+        c_soil++;
+        if (crop && crop != CROP_WITHERED) c_crop++;
+    }
+}
+
 static uint16_t wage_now(uint8_t role) {
-    uint16_t i, units = 0, w;
-    uint8_t k, plots = 0, crop;
-    {   // owned plots: popcount by bytes (a variable 16-bit shift per plot was a loop)
-        uint8_t b = (uint8_t)G.plots, h = (uint8_t)(G.plots >> 8);
-        for (k = 8; k; k--) { plots += (b & 1) + (h & 1); b >>= 1; h >>= 1; }
-    }
-    w = wage_base[role] + (uint16_t)wage_plot[role] * plots;
-    if (role == ROLE_WATER || role == ROLE_HARVEST) {
-        const uint8_t *pc = G.cell, *p1 = G.a1;
-        for (i = 0; i < 1024; i++, pc++, p1++) {
-            if (*pc != C_SOIL) continue;
-            crop = *p1 & SOIL_CROP;
-            if (role == ROLE_WATER) units++;
-            else if (crop && crop != CROP_WITHERED) units++;
-        }
-    }
-    if (role == ROLE_WATER) w += units >> 1;              // +1 per 2 tilled tiles
-    else if (role == ROLE_HARVEST) w += units << 1;       // +2 per growing crop
+    uint16_t w;
+    uint8_t k;
+    w = wage_base[role] + (uint16_t)wage_plot[role] * plots_owned();
+    if ((role == ROLE_WATER || role == ROLE_HARVEST) && !c_ok) count_soil();
+    if (role == ROLE_WATER) w += c_soil >> 1;             // +1 per 2 tilled tiles
+    else if (role == ROLE_HARVEST) w += c_crop << 1;      // +2 per growing crop
     else if (role == ROLE_RANCH) {
         for (k = 0; k < MAX_ANIMALS; k++) if (G.anim[k].kind != 0xFF) w += 12;   // +12 per animal
     }
@@ -87,8 +89,8 @@ static void ship(uint8_t it, uint8_t q) {
 }
 
 static void work(void) {
-    uint16_t i;
-    uint8_t k, c, crop, *pc = G.cell, *p1 = G.a1, *p2 = G.a2;
+    uint16_t i, r;
+    uint8_t k, n, c, crop, a2, *pc, *p1, *pe;
     uint8_t harv = G.staff[ROLE_HARVEST], grounds = G.staff[ROLE_GROUNDS], water = G.staff[ROLE_WATER];
     // rancher: collect what's waiting (quality from happiness), then feed today's hay
     if (G.staff[ROLE_RANCH])
@@ -109,31 +111,33 @@ static void work(void) {
             }
         }
     if (!(harv | grounds | water)) return;
-    // one pass over the farm for the field hands (each cell's jobs in the old order: harvest, clear, water)
-    for (i = 0; i < 1024; i++, pc++, p1++, p2++) {
-        c = *pc;
+    // one pass over your land for the field hands (each cell's jobs in the old order: harvest, clear, water)
+    scan_types(C_SOIL, grounds ? C_WEEDS : C_SOIL);
+    FOR_OWNED_CELLS(r, n, pc, pe) {
+        c = *pc; i = CELL_I(pc); p1 = pc + 0x1000;   // p1: its a1
         if (c == C_SOIL) {
             crop = *p1 & SOIL_CROP;
-            // harvester: every ripe crop (regrowers stay planted, keeping their seed rarity), quality rolled like a hand harvest
-            if (harv && crop && crop != CROP_WITHERED && (*p2 & SOIL_DAYS) >= crops[crop].days) {
+            // harvester: every ripe crop (regrowers stay planted, keeping their seed rarity, a legendary one settling into
+            // a rare one as by hand), quality rolled like a hand harvest
+            if (harv && crop && crop != CROP_WITHERED && ((a2 = W_A2(i)) & SOIL_DAYS) >= crops[crop].days) {
                 ship(crop - 1, roll_quality(*p1 & SOIL_FERT));
-                if (*p2 & SOIL_RAR) ship(crop - 1, roll_quality(*p1 & SOIL_FERT));            // rare/legendary: 2+
-                if (((*p2 & SOIL_RAR) >> 6) == R_LEGEND) ship(crop - 1, roll_quality(1));     // legendary: 3
-                if (crops[crop].regrow) *p2 = (*p2 & SOIL_RAR) | (crops[crop].days - crops[crop].regrow);
-                else { *p1 &= SOIL_WET | SOIL_FERT; *p2 = 0; }
+                if (a2 & SOIL_RAR) ship(crop - 1, roll_quality(*p1 & SOIL_FERT));            // rare/legendary: 2+
+                if (((a2 & SOIL_RAR) >> 6) == R_LEGEND) ship(crop - 1, roll_quality(1));     // legendary: 3
+                if (crops[crop].regrow) W_A2_SET(i, (((a2 & SOIL_RAR) >> 6) == R_LEGEND ? R_RARE << 6 : a2 & SOIL_RAR) | (crops[crop].days - crops[crop].regrow));
+                else { *p1 &= SOIL_WET | SOIL_FERT; W_A2_SET(i, 0); }
                 G.stat_harvest++;
                 m_harvested++;
             }
             // groundskeeper: withered crops
             if (grounds && (*p1 & SOIL_CROP) == CROP_WITHERED) {
-                *p1 &= SOIL_WET | SOIL_FERT; *p2 = 0;
+                *p1 &= SOIL_WET | SOIL_FERT; W_A2_SET(i, 0);
                 m_cleared++;
             }
             // waterer: the morning round, every tilled tile
             if (water && !(*p1 & SOIL_WET)) { *p1 |= SOIL_WET; m_watered++; }
-        } else if (c == C_WEEDS && grounds && *p1 && owned((uint8_t)i & 31, (uint8_t)(i >> 5))) {
+        } else if (c == C_WEEDS && grounds && *p1) {
             // groundskeeper: weeds that grew back on your land (clearing the original overgrowth is yours)
-            *pc = C_GRASS; *p1 = 0; *p2 = 0;
+            *pc = C_GRASS; *p1 = 0; W_A2_SET(i, 0);
             G.stat_weeds++;
             m_cleared++;
         }
@@ -145,11 +149,13 @@ void staff_overnight(void) BANKED {
     m_wages = m_watered = m_harvested = m_collected = m_fed = m_cleared = 0;
     m_shipped = 0;
     m_unpaid = m_quit = m_nohay = 0;
+    c_ok = 0;
     for (r = 0; r < NUM_ROLES; r++) {
         uint32_t owed;
         if (!G.staff[r]) continue;
         bit = 1 << r;
         G.staff_wage[r] = wage_now(r);
+        c_ok = 1;
         owed = G.staff_wage[r];
         if (G.staff_unpaid & bit) owed <<= 1;   // back pay for the unpaid night
         if (G.gold >= owed) {
@@ -166,6 +172,7 @@ void staff_overnight(void) BANKED {
             m_unpaid |= bit;
         }
     }
+    c_ok = 0;
     work();
 }
 
@@ -216,14 +223,16 @@ void staff_report(void) BANKED {
 
 // ---------------------------------------------------------------- talking to a farmhand
 void staff_talk(uint8_t role) BANKED {
-    uint16_t i, dry = 0;
+    uint16_t r, dry = 0;
+    uint8_t n, *pc, *pe;
     if (!G.staff[role]) return;
     set_speaker(worker_name(role));   // RAM copy: say() runs with other banks mapped
     s_clr();
     if (G.staff_unpaid & (1 << role)) s_add("Um, boss... I wasn't paid last night. One more and I have to go.");
     else switch (role) {
     case ROLE_WATER:
-        for (i = 0; i < 1024; i++) if (G.cell[i] == C_SOIL && !(G.a1[i] & SOIL_WET)) dry++;
+        scan_types(C_SOIL, C_SOIL);
+        FOR_OWNED_CELLS(r, n, pc, pe) if (!(pc[0x1000] & SOIL_WET)) dry++;
         if (dry) { s_add("New soil? I'll water those "); s_num(dry, 0); s_add(" tiles first thing tomorrow!"); }
         else s_add("All watered, boss!");
         break;
@@ -247,10 +256,14 @@ void staff_talk(uint8_t role) BANKED {
 
 // ---------------------------------------------------------------- where they stand during the day
 static uint16_t first_cell(uint8_t crop_only) {  // first soil (or crop) tile
-    uint16_t i;
-    for (i = 0; i < 1024; i++)
-        if (G.cell[i] == C_SOIL && (!crop_only || (G.a1[i] & SOIL_CROP)))
-            return (i & 31) | ((i >> 5) << 8);
+    uint16_t i, r;
+    uint8_t n, *pc, *pe;
+    scan_types(C_SOIL, C_SOIL);
+    FOR_OWNED_CELLS(r, n, pc, pe)
+        if (!crop_only || (pc[0x1000] & SOIL_CROP)) {
+            i = CELL_I(pc);
+            return WIDX_X(i) | ((uint16_t)WIDX_Y(i) << 8);
+        }
     return 0xFFFF;
 }
 
@@ -345,21 +358,28 @@ static void hire_menu(void) {
     }
 }
 
-static const char *const hall_items[4] = {"TALK", "HIRE HELP", "STAFF", "BYE"};
+// Hollis's counter: on a festival day FESTIVAL leads the list (festival.c); VALLEY is the restoration board (valley.c),
+// INVEST the town investments (invest.c)
+static const char *const hall_items[7] = {"FESTIVAL", "TALK", "VALLEY", "HIRE HELP", "STAFF", "INVEST", "BYE"};
 
-uint8_t staff_hall(void) BANKED {
-    uint8_t r;
+void staff_hall(void) BANKED {
+    uint8_t r, f = FESTIVAL_DAY();
     set_speaker("Hollis");
-    say("Need a hand on the farm? Folks in town want work.");
+    say(f ? "Happy festival day! The games are on out front." : "Need a hand on the farm? Folks in town want work.");
     ui_speaker = 0;
     while (1) {
         ui_begin();
-        r = ui_menu(0, 0, 12, hall_items, 4, 0);
+        r = ui_menu(0, 0, 12, hall_items + (f ? 0 : 1), f ? 7 : 6, 0);
         ui_end();
-        if (r == 0) return 1;
-        if (r == 1) hire_menu();
-        else if (r == 2) { ui_begin(); staff_page(); ui_end(); }
-        else return 0;
+        if (r == 0xFF) return;
+        if (!f) r++;   // 0 festival, 1 talk, 2 valley, 3 hire, 4 staff, 5 invest, 6 bye
+        if (r == 0) { festival_hall(); return; }
+        if (r == 1) { hall_act(); return; }
+        if (r == 2) valley_board();
+        else if (r == 3) hire_menu();
+        else if (r == 4) { ui_begin(); staff_page(); ui_end(); }
+        else if (r == 5) invest_menu();
+        else return;
     }
 }
 
@@ -382,9 +402,10 @@ void staff_page(void) BANKED {
         ui_title(2, 0, sbuf);
         if (!n) {
             ui_text(2, 2, "Nobody yet.");
-            ui_text(2, 4, "Mayor Hollis at");
-            ui_text(2, 5, "town hall can find");
-            ui_text(2, 6, "you farmhands.");
+            ui_text(2, 4, "Ask Mayor Hollis");   // 17 columns inside the box
+            ui_text(2, 5, "at the town hall");
+            ui_text(2, 6, "to find you");
+            ui_text(2, 7, "farmhands.");
             wait_button();
             return;
         }

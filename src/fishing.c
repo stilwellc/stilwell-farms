@@ -8,22 +8,39 @@ BANKREF(fish_start)
 extern void put16(uint8_t oam, int16_t x, int16_t y, uint8_t tile, uint8_t pal, uint8_t flip);
 extern void hide16(uint8_t oam);
 
+// the sea off the beach: its own fish, by season and time of day (the beach shack's tide board says which)
+//   Sardine: always.  Flounder: spring + summer days.  Snapper: summer + fall days.
+//   Squid: after 6pm.  Tuna: rare, summer + winter, likelier with a better rod.
+static uint8_t ocean_fish(uint8_t r, uint8_t tier) {
+    uint8_t s = G.season;
+    if ((s == SEASON_SUMMER || s == SEASON_WINTER) && r < 12 + tier * 8) return I_TUNA;
+    if (G.time >= 1080) return (r & 1) ? I_SQUID : I_SARDINE;
+    if (r < 120) return I_SARDINE;
+    if (s == SEASON_SPRING) return I_FLOUNDER;
+    if (s == SEASON_FALL) return I_SNAPPER;
+    if (s == SEASON_SUMMER) return (r & 1) ? I_SNAPPER : I_FLOUNDER;
+    return I_SARDINE;
+}
+
 // which fish: by water body, season, time, rod tier
 static uint8_t pick_fish(uint8_t x, uint8_t y) {
-    uint8_t p = PLOT_OF(x, y), r = rnd(), tier = G.tier[TT_ROD];
+    uint8_t p = PLOT_OF(x, y), k = plot_kind(p), r = rnd(), tier = G.tier[TT_ROD];
+    if (G.buff & BUFF_LUCKY) tier += 2;         // Lucky dish
+    if (scene == MAP_BEACH) return ocean_fish(r, tier);
+    if (G.valley_done & VD_FISH) tier++;       // the valley's streams, restored
     if (r < 3 + tier * 3) return I_KOI;
-    if (p == 11) return (r & 1) ? I_TROUT : I_MINNOW;                       // river
-    if (p == 8) return G.time >= 1080 ? I_CATFISH : ((r & 1) ? I_BASS : I_CARP);  // lake
-    if (p == 12) return (r & 1) ? I_CARP : I_CATFISH;                       // marsh
+    if (k == RK_RIVER || (p & 7) == 5) return (r & 1) ? I_TROUT : I_MINNOW;      // the river runs down plot column 5
+    if (k == RK_LAKE) return G.time >= 1080 ? I_CATFISH : ((r & 1) ? I_BASS : I_CARP);  // lakes
+    if (k == RK_MARSH) return (r & 1) ? I_CARP : I_CATFISH;                     // marshes
     if (G.season == SEASON_SUMMER && (r & 3) == 0) return I_BASS;
     return (r < 160) ? I_MINNOW : I_CARP;                                   // your own pond
 }
 
 static uint8_t difficulty(uint8_t f) {
     switch (f) {
-    case I_KOI: return 4;
-    case I_CATFISH: case I_TROUT: return 3;
-    case I_BASS: return 2;
+    case I_KOI: case I_TUNA: return 4;
+    case I_CATFISH: case I_TROUT: case I_SQUID: return 3;
+    case I_BASS: case I_SNAPPER: case I_FLOUNDER: return 2;
     case I_CARP: return 1;
     default: return 0;
     }
@@ -48,6 +65,7 @@ void fish_start(void) BANKED {
     sfx(SFX_SPLASH);
     hud_flash("Wait for a bite...");
     wait = 60 + (rnd() & 127);
+    if (G.buff & BUFF_LUCKY) wait = 40 + (rnd() & 63);
     for (t = 0; t < wait; t++) {
         put16(2, (int16_t)(x * 16) - scx, (int16_t)(y * 16) - scy + ((t >> 4) & 1), SPR_BOBBER, SPR_BOBBER_PAL, 0);
         read_input();

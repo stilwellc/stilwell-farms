@@ -23,7 +23,7 @@ extern const DecorDef decor[NUM_DECOR];
 // ("home") season gives a bumper crop. Yield grows with age (a2): 2 fruit when young, 5 when mature.
 #define season_ok_tree(k) (G.season != SEASON_WINTER)
 #define tree_home_season(k) ((k) == 0 ? G.season == SEASON_FALL : (k) == 3 ? G.season == SEASON_SPRING : G.season == SEASON_SUMMER)
-#define TREE_RIPE_DAYS 7
+#define TREE_RIPE_DAYS 10
 #define tree_yield(age) ((age) < 16 ? 2 : (age) < 22 ? 3 : (age) < 28 ? 4 : 5)
 
 enum { MK_KEG, MK_PRESS, MK_JAR };

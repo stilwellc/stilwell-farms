@@ -1,0 +1,16 @@
+# key F major  meter 4/4
+# By the sea: an easygoing, swaying tune. Off-beat chord stabs, a 3+3+2 island bass, shaker hats.
+# A (1-8): F Bb C F | Dm Gm C C7
+song BEACH tempo=7 loop=yes
+ch1 duty=2 env=a2
+o4 a8 o5 c8 r8 c8 d8 c8 o4 a4 | o4 b-8 o5 d8 r8 d8 f8 d8 o4 b-4 | o4 g8 b-8 r8 b-8 o5 c8 o4 b-8 g8 e8 | o4 f4. a8 c4 r4 |
+o4 a8 o5 d8 r8 d8 e8 d8 c4 | o4 b-8 g8 r8 b-8 o5 d8 c8 o4 b-4 | o4 g8 a8 b-8 o5 c8 d8 e8 f8 g8 | o5 e4 c4 o4 b-4 g4 |
+ch2 duty=1 env=52
+r8 o4 c8 r8 a8 r8 c8 r8 a8 | r8 o4 d8 r8 b-8 r8 d8 r8 b-8 | r8 o4 e8 r8 g8 r8 e8 r8 g8 | r8 o4 c8 r8 a8 r8 c8 r8 a8 |
+r8 o4 d8 r8 a8 r8 d8 r8 f8 | r8 o4 d8 r8 b-8 r8 d8 r8 g8 | r8 o4 e8 r8 g8 r8 e8 r8 g8 | r8 o4 e8 r8 b-8 r8 e8 r8 g8 |
+ch3 wave=bass vol=2
+o2 f8. f8. o3 c8 o2 f8. f8. o3 c8 | o2 b-8. b-8. o3 f8 o2 b-8. b-8. o3 f8 | o2 c8. c8. g8 c8. c8. g8 | o2 f8. f8. o3 c8 o2 f8. f8. o3 c8 |
+o2 d8. d8. a8 d8. d8. a8 | o2 g8. g8. o3 d8 o2 g8. g8. o3 d8 | o2 c8. c8. g8 c8. c8. g8 | o2 c8. c8. g8 b-8. b-8. g8 |
+ch4
+k8 h16 h16 s8 h8 k8 h16 h16 s8 h8 | k8 h16 h16 s8 h8 k8 h16 h16 s8 h8 | k8 h16 h16 s8 h8 k8 h16 h16 s8 h8 | k8 h16 h16 s8 h8 k8 h16 h16 s8 h8 |
+k8 h16 h16 s8 h8 k8 h16 h16 s8 h8 | k8 h16 h16 s8 h8 k8 h16 h16 s8 h8 | k8 h16 h16 s8 h8 k8 h16 h16 s8 h8 | k8 h16 h16 s8 s8 s8 s16 s16 s8 h8 |

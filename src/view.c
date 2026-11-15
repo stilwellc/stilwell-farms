@@ -6,6 +6,8 @@
 // The drawn region is a 12x11-cell window that follows the camera through the 32x32 BG ring.
 // The metatile tables live in this file's bank (art_mt.h), so drawing a cell reads them directly
 // instead of making two banked mt_get calls per cell; this also keeps ~2KB of code out of bank 0.
+// Only 'near' metatiles (ids < MT_NEAR) are here; 'far' ones (rare or off-farm art) are 17-byte records
+// in other banks, copied into far_rec (WRAM) by far_get before use, so the art can keep growing.
 #pragma bank 255
 #include <gb/gb.h>
 #include <gb/cgb.h>
@@ -15,10 +17,12 @@
 BANKREF(view_reset)
 
 void mt_get(mt_t mt, uint16_t *q, uint8_t *pf) BANKED {   // for callers outside this bank
-    const uint8_t *s = (const uint8_t *)&mt_q[mt << 2], *p = &mt_pf[mt << 2];
+    const uint8_t *s, *p;
     uint8_t *d = (uint8_t *)q, n;
+    if (mt < MT_NEAR) { s = (const uint8_t *)&mt_q[mt << 2]; p = &mt_attr[mt << 2]; }
+    else { far_get(mt - MT_NEAR); s = far_rec; p = far_rec + 12; }
     for (n = 8; n; n--) *d++ = *s++;
-    for (n = 4; n; n--) *pf++ = *p++;
+    for (n = 4; n; n--) *pf++ = *p++ & ~0x08;   // palette + flips (mt_attr minus the bank-1 bit)
 }
 
 #define NSLOT 255
@@ -26,6 +30,7 @@ void mt_get(mt_t mt, uint16_t *q, uint8_t *pf) BANKED {   // for callers outside
 static uint16_t slot_tile[NSLOT];        // slot -> cache id (0xFFFF none)
 static uint16_t slot_ref[NSLOT];
 static uint8_t slot_hand;
+static uint8_t slot_free;                // slots nothing references (reusable): 0 = the cache is full
 // cache id -> slot lookup: a small chained hash (RAM is tight; a flat table would cost 1 byte per art tile)
 static uint8_t bucket[256];              // id & 255 -> first slot in chain
 static uint8_t chain[NSLOT];             // slot -> next slot in the same bucket
@@ -43,14 +48,17 @@ static mt_t drawn[256];                  // ring (cy&15)<<4 | (cx&15) -> mt draw
 static uint8_t vx0, vy0;                 // drawn region origin (cells)
 // 11x10 cells cover the screen at any scroll; one spare column and row sit on the side the camera last
 // moved toward, so the line that streams in is off screen for the next 16px and is drawn a few cells a
-// frame (view_update) instead of all at once
-#define VW 12
+// frame (view_update) instead of all at once. Columns keep a spare on BOTH sides: the camera follows the
+// player 72px from the left, so its x scroll is never cell-aligned, and with a spare on one side only,
+// turning back (left <-> right) had to draw a whole column in one frame (a dropped frame on dense
+// streets). Rows are aligned whenever the player stands still, and turns happen at rest.
+#define VW 13
 #define VH 11
 #define BUDGET 4                         // spare-line cells drawn per frame
 // lines still to draw: a column (x, rows r0..r1-1) and a row (y, columns c0..c1-1), in map cells; both can be
 // pending at once (turning a corner), and are clipped to the window whenever it moves
 static uint8_t pc_on, pc_x, pc_r0, pc_r1, pr_on, pr_y, pr_c0, pr_c1;
-static uint8_t left_spare, up_spare;     // the spare column is on the left / the spare row on top
+static uint8_t up_spare;                 // the spare row is on top
 static uint16_t last_scx, last_scy;
 uint8_t view_w = 32, view_h = 32;
 
@@ -61,11 +69,13 @@ static void cache_clear(void) {
     for (s = 0; s < NSLOT; s++) { slot_tile[s] = 0xFFFF; slot_ref[s] = 0; chain[s] = NOSLOT; }
     memset(drawn, 0xFF, sizeof(drawn));
     slot_hand = 0;
+    slot_free = NSLOT;
 }
 
 static uint8_t cache_get(uint16_t id) {
     uint8_t s = find_slot(id), n;
-    if (s != NOSLOT) { slot_ref[s]++; return s; }
+    if (s != NOSLOT) { if (!slot_ref[s]++) slot_free--; return s; }
+    if (!slot_free) return NOSLOT;   // full: fail at once (scanning all 255 slots per quad cost ~25% of a frame a cell)
     for (n = 0; n < NSLOT; n++) {
         s = slot_hand;
         if (++slot_hand == NSLOT) slot_hand = 0;
@@ -75,6 +85,7 @@ static uint8_t cache_get(uint16_t id) {
             chain[s] = bucket[(uint8_t)id];
             bucket[(uint8_t)id] = s;
             slot_ref[s] = 1;
+            slot_free--;
             VBK_REG = 0;
             ctile_upload(id, s);
             return s;
@@ -85,7 +96,7 @@ static uint8_t cache_get(uint16_t id) {
 
 static void cache_put(uint16_t id) {
     uint8_t s = find_slot(id);
-    if (s != NOSLOT && slot_ref[s]) slot_ref[s]--;
+    if (s != NOSLOT && slot_ref[s] && !--slot_ref[s]) slot_free++;
 }
 
 static void release(uint8_t ring) {
@@ -95,8 +106,9 @@ static void release(uint8_t ring) {
     if (m == 0xFFFF) return;
     drawn[ring] = 0xFFFF;
     if (m & 0x8000) return;              // nothing cached in this cell
-    qq = &mt_q[m << 2];
-    for (cf = mt_cf[m]; cf; cf >>= 1, qq++)
+    if (m < MT_NEAR) { qq = &mt_q[m << 2]; cf = mt_cf[m]; }
+    else { far_get(m - MT_NEAR); qq = (const uint16_t *)far_rec; cf = far_rec[16]; }
+    for (; cf; cf >>= 1, qq++)
         if (cf & 1) cache_put(*qq);
 }
 
@@ -106,7 +118,7 @@ static mt_t boundary_mt(uint8_t x, uint8_t y) {
     uint8_t n = (y > 0 && owned(x, y - 1)), s = (y < WH - 1 && owned(x, y + 1));
     uint8_t w = (x > 0 && owned(x - 1, y)), e = (x < WW - 1 && owned(x + 1, y));
     if (!(n | s | w | e)) return 0xFFFF;
-    if (G.cell[WIDX(x, y)] == C_ROAD) return 0xFFFF;
+    if (W_CELL[WIDX(x, y)] == C_ROAD) return 0xFFFF;
     if (((n || s) && (x & 7) == 4) || ((w || e) && (y & 7) == 4)) return MT_FOR_SALE;
     if (n || s) return (w || e) ? MT_ROPE_POST : MT_ROPE_H;
     return MT_ROPE_V;
@@ -124,11 +136,27 @@ static mt_t look(uint8_t x, uint8_t y) {
         }
         return world_cell_mt(x, y);
     }
-    if (scene == MAP_TOWN && G.biz_owned) {   // owned businesses draw over their vacant storefront
-        mt_t b = biz_mt(x, y);
-        if (b != 0xFFFF) return b;
+    if (scene == MAP_TOWN) {
+        mt_t m;
+        // businesses (the storefront rows 7-9 and 16-18) and Market Street (rows 21+): biz.c, invest.c
+        if ((G.biz_owned | G.mk_flags | G.town_proj) && ((uint8_t)(y - 7) < 3 || (uint8_t)(y - 16) < 3 || y >= MK_GATE_Y)) {
+            m = biz_mt(x, y);
+            if (m != 0xFFFF) return m;
+        }
+        if (G.valley_done) {   // valley.c: restored town art
+            m = valley_mt(x, y);
+            if (m != 0xFFFF) return m;
+        }
+        m = map_mt(MIDX(x, y));
+        if (G.town_proj & TP_PAVING) {   // invest.c's Square Paving: brick streets, string lights (drawn here: every cell)
+            if (m == MT_COBBLE) return ((x ^ y) & 1) ? MT_PAVING_B : MT_PAVING_A;
+            if (m == MT_BUNTING) return MT_STRING_LIGHTS;
+        }
+        if ((G.town_proj & TP_BOARDWALK) && y == 15 && x >= 20 && m == MT_DIRT) return MT_BOARDWALK;
+        return m;
     }
-    return IS_INTERIOR(scene) ? interior_mt(x, y) : map_mt(WIDX(x, y));
+    if (IS_AREA(scene)) return area_mt(x, y);   // mine rocks + ladders, beach finds
+    return IS_INTERIOR(scene) ? interior_mt(x, y) : map_mt(MIDX(x, y));
 }
 
 // ---------------------------------------------------------------- drawing
@@ -210,18 +238,26 @@ static void vcopy(uint8_t *dst, const uint8_t *src) __naked {
 static void draw(uint8_t x, uint8_t y) {
     uint8_t ring = ((y & 15) << 4) | (x & 15), cf;
     mt_t m;
-    uint16_t i4;
+    const uint16_t *qq;
     release(ring);
     if (x >= view_w || y >= view_h) m = MT_FOREST;
     else m = look(x, y);
-    i4 = m << 2;
-    put_t = &mt_tile[i4];
-    put_a = &mt_attr[i4];
-    cf = mt_cf[m];
+    if (m < MT_NEAR) {
+        uint16_t i4 = m << 2;
+        put_t = &mt_tile[i4];
+        put_a = &mt_attr[i4];
+        qq = &mt_q[i4];
+        cf = mt_cf[m];
+    } else {   // a far record: copied into far_rec (it stays put until the next far_get)
+        far_get(m - MT_NEAR);
+        put_t = far_rec + 8;
+        put_a = far_rec + 12;
+        qq = (const uint16_t *)far_rec;
+        cf = far_rec[16];
+    }
     if (!cf) drawn[ring] = m | 0x8000;   // all static: written straight from the tables
     else {
         uint8_t k;
-        const uint16_t *qq = &mt_q[i4];
         memcpy(tbuf, put_t, 4);   // (an indexed C loop here cost ~140 cycles a byte)
         memcpy(abuf, put_a, 4);
         for (k = 0; k < 4; k++, cf >>= 1, qq++)
@@ -306,7 +342,7 @@ void view_reset(void) BANKED {
     cache_clear();
     pc_on = pr_on = 0;
     last_scx = scx; last_scy = scy;
-    vx0 = origin(scx, VW, view_w, left_spare);
+    vx0 = origin(scx, VW, view_w, 1);
     vy0 = origin(scy, VH, view_h, up_spare);
     for (j = 0; j < VH; j++)
         for (i = 0; i < VW; i++) draw(vx0 + i, vy0 + j);
@@ -314,9 +350,9 @@ void view_reset(void) BANKED {
 
 void view_update(void) BANKED {
     uint8_t nx, ny, j, budget = BUDGET;
-    if (scx != last_scx) { left_spare = scx < last_scx; last_scx = scx; }
+    if (scx != last_scx) last_scx = scx;
     if (scy != last_scy) { up_spare = scy < last_scy; last_scy = scy; }
-    nx = origin(scx, VW, view_w, left_spare);
+    nx = origin(scx, VW, view_w, 1);
     ny = origin(scy, VH, view_h, up_spare);
     // each step releases the line leaving the window and queues the one entering it (off screen for now);
     // a column still pending from the last step is finished first unless it is the one leaving
@@ -408,15 +444,24 @@ static void ui_quad(uint8_t x, uint8_t y, uint16_t qv, uint8_t p) {
     VBK_REG = 0; set_win_tile_xy(x, y, t);
 }
 
+static const uint16_t *u_q;              // the quads + attrs of the metatile put_mt is drawing
+static const uint8_t *u_a;
+static void ui_rec(mt_t m) {
+    if (m < MT_NEAR) { u_q = &mt_q[m << 2]; u_a = &mt_attr[m << 2]; }
+    else { far_get(m - MT_NEAR); u_q = (const uint16_t *)far_rec; u_a = far_rec + 12; }
+}
+
 static void put_mt(uint8_t x, uint8_t y, mt_t m) {
     uint8_t k;
-    for (k = 0; k < 4; k++) ui_quad(x + (k & 1), y + (k >> 1), mt_q[(m << 2) + k], mt_pf[(m << 2) + k]);
+    ui_rec(m);
+    for (k = 0; k < 4; k++) ui_quad(x + (k & 1), y + (k >> 1), u_q[k], u_a[k] & ~0x08);
 }
 
 void ui_put_mt(uint8_t x, uint8_t y, mt_t m) BANKED { put_mt(x, y, m); }
 
 void ui_put_quad(uint8_t x, uint8_t y, mt_t m, uint8_t k) BANKED {
-    ui_quad(x, y, mt_q[(m << 2) + k], mt_pf[(m << 2) + k]);
+    ui_rec(m);
+    ui_quad(x, y, u_q[k], u_a[k] & ~0x08);
 }
 
 void ui_put_struct(uint8_t x, uint8_t y, mt_t first, uint8_t w, uint8_t h) BANKED {

@@ -1,0 +1,33 @@
+# Inside a coop (barn.c). Six nest boxes along the back wall, one per hen: an egg shows in a hen's box
+# when she has laid. Hens peck around the floor; the trough is filled from the straw-and-feed store.
+# The bale by the roost is that store (A fills the trough). Walls and floor follow the farm's building
+# style. The doorway leads back out to the coop door.
+map COOP set=INTERIOR w=10 h=9 music=NONE
+key L WALL_SIDE_L block
+key R WALL_SIDE_R block
+key T BARN_BEAM block
+key l BARN_BEAM_LAMP block
+key W BARN_WALL_CLASSIC block
+key . BARN_FLOOR_CLASSIC walk
+key N NEST_EMPTY block
+key P PERCH block
+key B BARN_BALE block
+
+key X WALL_FRONT block
+key C WALL_CORNER_L block
+key D WALL_CORNER_R block
+key [ BARN_DOOR_L walk
+key ] BARN_DOOR_R walk
+grid
+LTTlTTlTTR
+LWWWWWWWWR
+LNNNNNNPBR
+L........R
+L........R
+L........R
+L........R
+L........R
+CXXX[]XXXD
+place FEED_TROUGH 6 5
+warp 4 8 FARM 0 0 down
+warp 5 8 FARM 0 0 down

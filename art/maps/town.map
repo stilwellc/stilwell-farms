@@ -1,7 +1,9 @@
 # Stilwell Farms town: the farm road enters at the top (x=15..16).
 # North row: blacksmith, general store, cafe, carpenter on Main Street; town hall heads the plaza;
 # realtor + houses on the side lanes; park along the south street. Borders are forest.
-map TOWN set=TOWN w=32 h=24 music=TOWN
+# Market Street (rows 21-31, invest.c): through the gate south of the park, closed (main.c walkable)
+# until you buy it at the Land Office. Four lots for businesses you build, four community sites.
+map TOWN set=TOWN w=32 h=32 music=TOWN
 key F FOREST block
 key . GRASS walk
 key , GRASS2 walk
@@ -26,13 +28,15 @@ key C RIPE_CORN block
 key S RIPE_STRAWB block
 key R FRUIT_TREE_RIPE block
 key W WELL block
+key k GRASS block
+key s SITE_SIGN block
 grid
 FFFFFFFFFFFFFFF==FFFFFFFFFFFFFFF
 FT..*TT......T.==,T.....TT.*,.TF
 Ff...f,o....,f.==.f....o.f....fF
 FL......o...*L.==.L....o.L....LF
-F==============================F
-F==============================F
+===============================F
+===============================F
 F.,T..*.Tlccccccccccccl*.R.R.R.F
 Fqhhhhq..cccccccccccccc.,......F
 FvPCSPv.,ccccncccccccccR.R.B.R.F
@@ -42,15 +46,23 @@ F..=.,..Wcccccccccccccc........F
 FT.=..T..cTccbccccbccTc..f.....F
 Ff.=....fcccccoccoccccc........F
 F.*=cc...lccccccccccccl.cc.,cc.F
-F==============================F
+F===============================
 F.f..f..f......cc......f..f..f.F
 FT.....T...f.f.cc.f.f...T.....TF
 F..fff.....B.cccccc.B.....fff..F
 FT.....T....Lcc..ccL....T.....TF
 F..,..*..T...ccffcc...T..*..,..F
-FTT.TT.TTT.TT.TTTTTT.TT.TTT.TT.F
-FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF
-FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF
+FTTTTTTTTTTTT..TTTTTTTTTTTTTTTTF
+FqhhhhhhhhhhqccqhhhhhhhhhhhhhhqF
+F..........T.cc.o.T.....,......F
+F....*......fccf.............,.F
+F..........l.cc.l.b....*.......F
+FccccccccccccccccccccccccccccccF
+FccccccccccccccccccccccccccccccF
+Fpksk..kskk.kskk.l..ksk.,T.T..pF
+Fpkkk*.kkkk.kkkk....kkk.....T.pF
+Fp....,.....kkkk.f..kkk..B....pF
+FppppppppppppppppppppppppppppppF
 place BLACKSMITH 2 1 act=SMITH
 place GENERAL_STORE 10 1 act=STORE
 place CAFE 19 1 act=CAFE
@@ -82,5 +94,34 @@ act 5 18 CREAMERY
 act 26 18 FLORIST
 act 27 18 FLORIST
 act 28 18 FLORIST
-warp 15 0 FARM 15 30 up
-warp 16 0 FARM 16 30 up
+warp 15 0 FARM 31 62 up
+warp 16 0 FARM 32 62 up
+# the west road climbs to the mine, the south road runs east to the beach
+warp 0 4 MINE 14 3 left
+warp 0 5 MINE 14 4 left
+warp 31 15 BEACH 1 5 right
+# Market Street (invest.c): the gate, four lots (biz.c draws what you build), the commons' project sites
+place GATE_CLOSED 13 21 walk act=GATE
+place LOT_SALE 2 23
+place LOT_SALE 7 23
+place LOT_SALE 20 23
+place LOT_SALE 26 23
+act 2 25 LOT0
+act 3 25 LOT0
+act 4 25 LOT0
+act 7 25 LOT1
+act 8 25 LOT1
+act 9 25 LOT1
+act 20 25 LOT2
+act 21 25 LOT2
+act 22 25 LOT2
+act 26 25 LOT3
+act 27 25 LOT3
+act 28 25 LOT3
+act 3 28 PLAYGROUND
+act 8 28 GARDEN
+act 9 28 GARDEN
+act 13 28 BANDSTAND
+act 14 28 BANDSTAND
+act 21 28 LIBRARY
+act 21 30 LIBRARY

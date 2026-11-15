@@ -17,7 +17,7 @@ static uint8_t green_ok(void) {   // a repaired (not ruined) greenhouse stands o
 }
 
 static void set_cell(uint16_t i, uint8_t c) {
-    G.cell[i] = c; G.a1[i] = 0; G.a2[i] = 0;
+    W_CELL[i] = c; W_A1[i] = 0; W_A2_SET(i, 0);
 }
 
 static void clear_to_grass(uint16_t i, uint8_t x, uint8_t y, uint8_t snd) {
@@ -37,6 +37,7 @@ static uint8_t roll_quality(uint8_t fert) {
 // legendary crops roll much better: fert 2 = legendary bonus odds
 static uint8_t roll_quality_r(uint8_t fert, uint8_t rar) {
     uint8_t r;
+    if (G.buff & BUFF_GREEN) fert = 1;   // Green dish: as if fertilized
     if (!rar) return roll_quality(fert);
     r = rnd();
     if (rar == R_LEGEND) {
@@ -76,18 +77,20 @@ static uint8_t strike(uint16_t i, uint8_t x, uint8_t y, uint8_t need, uint8_t ti
     if (tier >= 3) need = 1;
     else if (tier == 2 && need > 1) need--;
     if (hit_cell != i) {
-        if (hit_cell < 1024 && obstacle(G.cell[hit_cell])) G.a2[hit_cell] = 0;
+        if (hit_cell < WCELLS && obstacle(W_CELL[hit_cell])) W_A2_SET(hit_cell, 0);
         hit_cell = i;
-        G.a2[i] = 0;
+        W_A2_SET(i, 0);
     }
     if (!spend_energy(2)) return 0;
     player_pose(2, 8);
-    if (++G.a2[i] < need) {
+    need -= 1;
+    if (W_A2(i) < need) {
+        W_A2_SET(i, W_A2(i) + 1);
         sfx(snd);
         fx_show(SPR_DUST, SPR_DUST_PAL, x, y);
         return 0;
     }
-    G.a2[i] = 0;
+    W_A2_SET(i, 0);
     hit_cell = 0xFFFF;
     return 1;
 }
@@ -110,9 +113,9 @@ static uint8_t tool_area(uint8_t tool, uint8_t x, uint8_t y, uint8_t tier) {
         if (cx < 0 || cy < 0 || cx >= WW || cy >= WH || !owned(cx, cy)) continue;
         {
             uint16_t i = WIDX(cx, cy);
-            uint8_t c = G.cell[i];
+            uint8_t c = W_CELL[i];
             if (tool == T_HOE && grassy(c)) { set_cell(i, C_SOIL); hit++; redraw_cell(cx, cy); }
-            else if (tool == T_CAN && c == C_SOIL && !(G.a1[i] & SOIL_WET)) { G.a1[i] |= SOIL_WET; hit++; redraw_cell(cx, cy); }
+            else if (tool == T_CAN && c == C_SOIL && !(W_A1[i] & SOIL_WET)) { W_A1[i] |= SOIL_WET; hit++; redraw_cell(cx, cy); }
         }
     }
     return hit;
@@ -187,7 +190,7 @@ static void struct_act(uint8_t slot) {
         else animals_building(slot, A_HEN);
         break;
     case B_GREENHOUSE:
-        if (ruin) repair(slot, "greenhouse", 15000, 60, 150);
+        if (ruin) repair(slot, "greenhouse", 25000, 60, 150);
         else say("With the greenhouse running, every crop grows in any season!");
         break;
     case B_SILO:
@@ -214,7 +217,7 @@ static void struct_act(uint8_t slot) {
     }
     case B_WINDMILL: say("The windmill creaks happily in the breeze."); break;
     case B_GAZEBO: say("A lovely spot to watch the sunset over your farm."); break;
-    case B_STABLE: say("A fine stable. Maybe someday a horse will live here."); break;
+    case B_STABLE: stable_act(); break;   // horse.c
     default: say("Your tool shed. Everything in its place."); break;
     }
 }
@@ -222,17 +225,17 @@ static void struct_act(uint8_t slot) {
 // ---------------------------------------------------------------- machines
 
 static void machine_act(uint16_t i, uint8_t x, uint8_t y) {
-    uint8_t kind = G.a1[i] & 3, it, prod, days;
+    uint8_t kind = W_A1[i] & 3, it, prod, days;
     static const char *const names[3] = {"keg", "cheese press", "preserves jar"};
-    if (G.a2[i] & 0x80) {
-        prod = (G.a2[i] & 0x7F) - 1;
-        G.a2[i] = 0; G.a1[i] = kind;
+    if (W_A2(i) & 0x80) {
+        prod = (W_A2(i) & 0x7F) - 1;
+        W_A2_SET(i, 0); W_A1[i] = kind;
         redraw_cell(x, y);
         gain_item(prod, 0, 1);
         return;
     }
-    if (G.a2[i]) {
-        s_clr(); s_add("It'll be ready in "); s_num(G.a1[i] >> 2, 0); s_add(" days.");
+    if (W_A2(i)) {
+        s_clr(); s_add("It'll be ready in "); s_num(W_A1[i] >> 2, 0); s_add(" days.");
         say(sbuf);
         return;
     }
@@ -241,18 +244,18 @@ static void machine_act(uint16_t i, uint8_t x, uint8_t y) {
     it = ui_pick_item(kind == MK_PRESS ? PICK_MILK : PICK_PRODUCE);
     if (it == 0xFF) return;
     inv_take(it, 1);
-    if (kind == MK_KEG) { prod = it >= I_APPLE ? I_CIDER : I_JUICE; days = 5; }
+    if (kind == MK_KEG) { prod = it >= I_APPLE ? I_CIDER : I_JUICE; days = 3; }
     else if (kind == MK_PRESS) { prod = I_CHEESE; days = 1; }
     else { prod = it >= I_APPLE ? I_JAM : I_PICKLES; days = 2; }
-    G.a1[i] = kind | (days << 2);
-    G.a2[i] = prod + 1;
+    W_A1[i] = kind | (days << 2);
+    W_A2_SET(i, prod + 1);
     sfx(SFX_CONFIRM);
     hud_flash("Still working...");
 }
 
 // ---------------------------------------------------------------- tools
 static void use_tool(uint16_t i, uint8_t x, uint8_t y) {
-    uint8_t c = G.cell[i], crop = G.a1[i] & SOIL_CROP;
+    uint8_t c = W_CELL[i], crop = W_A1[i] & SOIL_CROP;
     switch (G.tool) {
     case T_HAND:
     case T_SICKLE:
@@ -271,20 +274,20 @@ static void use_tool(uint16_t i, uint8_t x, uint8_t y) {
                 }
             }
         } else if (c == C_SOIL && crop == CROP_WITHERED) {
-            G.a1[i] &= SOIL_WET | SOIL_FERT; G.a2[i] = 0;
+            W_A1[i] &= SOIL_WET | SOIL_FERT; W_A2_SET(i, 0);
             redraw_cell(x, y);
         } else if (G.tool == T_SICKLE && grassy(c)) {
             if (bld_find(B_SILO) == 0xFF) { hud_flash("Build a silo first"); return; }
             if (!spend_energy(1)) return;
             if (G.hay < 999) G.hay++;
-            if (c == C_WILDFLOWER) { G.cell[i] = C_GRASS; redraw_cell(x, y); }
+            if (c == C_WILDFLOWER) { W_CELL[i] = C_GRASS; redraw_cell(x, y); }
             sfx(SFX_HIT);
             hud_flash("+1 Hay");
         } else if (c == C_SOIL && crop && G.tool == T_HAND) {
             s_clr(); s_add(items[crop - 1].name);
             if (SOIL_RARITY(i)) s_ch(SOIL_RARITY(i) == R_LEGEND ? (char)0xF1 : '+');
             s_ch(' '); s_num(crops[crop].days - SOIL_GROWN(i), 0); s_ch('d');   // toast fits 18 chars
-            if (!(G.a1[i] & SOIL_WET)) s_add(s_len() <= 9 ? ", thirsty" : " dry");
+            if (!(W_A1[i] & SOIL_WET)) s_add(s_len() <= 9 ? ", thirsty" : " dry");
             else if (s_len() <= 13) s_add(" left");
             hud_flash(sbuf);
         }
@@ -300,7 +303,7 @@ static void use_tool(uint16_t i, uint8_t x, uint8_t y) {
         if (!(G.tips & 1)) { G.tips |= 1; say("Tip: switch to Seeds with SELECT to plant here, then water with the Can."); }
         break;
     case T_CAN:
-        if (c == C_WATER || (c == C_DECOR && G.a1[i] == DK_WELL)) {
+        if (c == C_WATER || (c == C_DECOR && W_A1[i] == DK_WELL)) {
             G.water = 30 + G.tier[TT_CAN] * 20;
             sfx(SFX_WATER); hud_flash("Watering can full!");
             return;
@@ -311,7 +314,7 @@ static void use_tool(uint16_t i, uint8_t x, uint8_t y) {
         player_pose(3, 12);
         if (tool_area(T_CAN, x, y, G.tier[TT_CAN])) {
             G.water--; sfx(SFX_WATER); fx_show(SPR_DROP, SPR_DROP_PAL, x, y);
-            if (!(G.tips & 0x10) && (G.a1[i] & SOIL_CROP)) {
+            if (!(G.tips & 0x10) && (W_A1[i] & SOIL_CROP)) {
                 G.tips |= 0x10;
                 say("Tip: watered soil turns dark. Only watered crops grow overnight, so water them every day!");
             }
@@ -330,16 +333,16 @@ static void use_tool(uint16_t i, uint8_t x, uint8_t y) {
             return;
         }
         G.seeds[s][rr]--;
-        G.a1[i] = (G.a1[i] & (SOIL_WET | SOIL_FERT)) | s; G.a2[i] = rr << 6;
+        W_A1[i] = (W_A1[i] & (SOIL_WET | SOIL_FERT)) | s; W_A2_SET(i, rr << 6);
         redraw_cell(x, y);
         if (rr == R_LEGEND) fx_show(SPR_SPARKLE, SPR_SPARKLE_PAL, x, y);
         break;
     }
     case T_FERT:
-        if (c != C_SOIL || (G.a1[i] & SOIL_FERT)) return;
+        if (c != C_SOIL || (W_A1[i] & SOIL_FERT)) return;
         if (!G.fert) { say("You're out of fertilizer. The General Store sells it."); return; }
         G.fert--;
-        G.a1[i] |= SOIL_FERT;
+        W_A1[i] |= SOIL_FERT;
         fx_show(SPR_SPARKLE, SPR_SPARKLE_PAL, x, y);
         hud_flash("Fertilized!");
         break;
@@ -352,7 +355,7 @@ static void use_tool(uint16_t i, uint8_t x, uint8_t y) {
             if (!strike(i, x, y, 3, G.tier[TT_AXE], SFX_CHOP)) return;
             sfx(SFX_CHOP);
             fx_show(SPR_DUST, SPR_DUST_PAL, x, y);
-            G.cell[i] = C_SAPLING_WILD; G.a2[i] = 0;   // forests regrow
+            W_CELL[i] = C_SAPLING_WILD; W_A2_SET(i, 0);   // forests regrow
             redraw_cell(x, y);
             G.wood += 6; gain_res("Wood", 6);
         } else if (c == C_LOG) {
@@ -373,10 +376,10 @@ static void use_tool(uint16_t i, uint8_t x, uint8_t y) {
             clear_to_grass(i, x, y, SFX_HIT);
             G.stone += 10; gain_res("Stone", 10);
         } else if (c == C_ORE) {
-            uint8_t k = G.a1[i] & 3, need = k == 0 ? 0 : k == 1 ? 1 : 2;
+            uint8_t k = W_A1[i] & 3, need = k == 0 ? 0 : k == 1 ? 1 : 2;
             if (G.tier[TT_HAMMER] < need) { say("This ore is too hard. Upgrade your hammer at the blacksmith."); return; }
             if (!spend_energy(5)) return;
-            G.cell[i] = C_SAND; G.a1[i] = 0;
+            W_CELL[i] = C_SAND; W_A1[i] = 0;
             redraw_cell(x, y);
             sfx(SFX_HIT);
             G.stone++;
@@ -396,10 +399,12 @@ static void use_tool(uint16_t i, uint8_t x, uint8_t y) {
 void farm_act(void) BANKED {
     uint8_t x, y, c, a;
     uint16_t i;
+    if (riding) { horse_dismount(); return; }   // horse.c: A climbs down
     if (!front_cell(&x, &y)) return;
     a = actor_at(x, y);
     if (a != 0xFF) {
         uint8_t an = actor_animal(a);
+        if (actor_is_horse(a)) { horse_talk(a); return; }
         if (actor_is_pet(a)) {
             if (!(G.pet_flags & 1)) { G.pet_flags |= 1; if (G.pet_love < 250) G.pet_love += 5; }
             fx_show(SPR_HEART, SPR_HEART_PAL, x, y);
@@ -425,16 +430,16 @@ void farm_act(void) BANKED {
         }
     }
     i = WIDX(x, y);
-    if (!owned(x, y) && G.cell[i] != C_ROAD) {
+    if (!owned(x, y) && W_CELL[i] != C_ROAD) {
         buy_plot_prompt(PLOT_OF(x, y));
         return;
     }
-    c = G.cell[i];
+    c = W_CELL[i];
     switch (c) {
-    case C_STRUCT: struct_act(G.a1[i]); return;
+    case C_STRUCT: struct_act(W_A1[i]); return;
     case C_MACHINE: machine_act(i, x, y); return;
     case C_DECOR:
-        switch (G.a1[i]) {
+        switch (W_A1[i]) {
         case DK_BIN: {
             uint32_t total = 0;
             uint8_t it, q;
@@ -462,7 +467,7 @@ void farm_act(void) BANKED {
             say(sbuf);
             return;
         case DK_BEEHIVE:
-            if (G.a2[i] >= 3) { G.a2[i] = 0; gain_item(I_HONEY, 0, 1); }
+            if (W_A2(i) >= 3) { W_A2_SET(i, 0); gain_item(I_HONEY, 0, 1); }
             else say("The bees are busy making honey.");
             return;
         case DK_SCARECROW: say("It keeps crows off crops within 4 steps."); return;
@@ -473,53 +478,55 @@ void farm_act(void) BANKED {
         }
         break;
     case C_TREE: {
-        uint8_t kind = G.a1[i] >> 5;
+        uint8_t kind = W_A1[i] >> 5;
         static const uint8_t fruit[4] = {I_APPLE, I_PEACH, I_ORANGE, I_CHERRY};
-        if (G.a2[i] < 10) { say("A young fruit tree. Give it time to grow."); return; }
-        if ((G.a1[i] & 31) >= TREE_RIPE_DAYS && season_ok_tree(kind)) {
-            uint8_t home = tree_home_season(kind), n = tree_yield(G.a2[i]) + (home ? 2 : 0);
-            G.a1[i] &= 0xE0;
+        if (W_A2(i) < 10) { say("A young fruit tree. Give it time to grow."); return; }
+        if ((W_A1[i] & 31) >= TREE_RIPE_DAYS && season_ok_tree(kind)) {
+            uint8_t home = tree_home_season(kind), n = tree_yield(W_A2(i)) + (home ? 2 : 0);
+            W_A1[i] &= 0xE0;
             redraw_cell(x, y);
             gain_item(fruit[kind], roll_quality(home), n);
             return;
         }
         if (!season_ok_tree(kind)) say("The tree is resting for winter. It will fruit again in spring.");
         else {
-            s_clr(); s_add("The fruit isn't ripe yet. Ready in "); s_num(TREE_RIPE_DAYS - (G.a1[i] & 31), 0);
+            s_clr(); s_add("The fruit isn't ripe yet. Ready in "); s_num(TREE_RIPE_DAYS - (W_A1[i] & 31), 0);
             s_add(" days. Fruit trees yield more as they age, and most in their own season.");
             say(sbuf);
         }
         return;
     }
     case C_BUSH:
-        if (G.a1[i] >= 5) { G.a1[i] = 0; redraw_cell(x, y); gain_item(I_BERRIES, 0, 2 + (rnd() & 1)); return; }
+        if (W_A1[i] >= 5) { W_A1[i] = 0; redraw_cell(x, y); gain_item(I_BERRIES, 0, 2 + (rnd() & 1)); return; }
         break;
     case C_FORAGE: {
         static const uint8_t f[3] = {I_BERRIES, I_MUSHROOM, I_HERB};
-        uint8_t it = f[G.a1[i] % 3];
-        G.cell[i] = C_GRASS; G.a1[i] = 0;
+        uint8_t it = f[W_A1[i] % 3];
+        W_CELL[i] = C_GRASS; W_A1[i] = 0;
         redraw_cell(x, y);
         gain_item(it, roll_quality(0), 1);
         return;
     }
     case C_GIANT: {
-        uint8_t part = G.a1[i] & 3, gx = x - (part & 1), gy = y - (part >> 1);
-        uint16_t j = WIDX(gx, gy);
-        G.cell[j] = G.cell[j + 1] = G.cell[j + 32] = G.cell[j + 33] = C_SOIL;
-        G.a1[j] = G.a1[j + 1] = G.a1[j + 32] = G.a1[j + 33] = 0;
-        G.a2[j] = G.a2[j + 1] = G.a2[j + 32] = G.a2[j + 33] = 0;
+        uint8_t part = W_A1[i] & 3, gx = x - (part & 1), gy = y - (part >> 1);
+        uint8_t k;
+        for (k = 0; k < 4; k++) {
+            uint16_t j = WIDX(gx + (k & 1), gy + (k >> 1));
+            W_CELL[j] = C_SOIL; W_A1[j] = 0; W_A2_SET(j, 0);
+        }
         redraw_rect(gx, gy, 2, 2);
         gain_item(I_PUMPKIN, 2, 12);
         G.goals |= 1UL << 20;
         return;
     }
     case C_SOIL: {
-        uint8_t crop = G.a1[i] & SOIL_CROP;
+        uint8_t crop = W_A1[i] & SOIL_CROP;
         if (crop && crop != CROP_WITHERED && SOIL_GROWN(i) >= crops[crop].days) {
-            uint8_t rr = SOIL_RARITY(i), q = roll_quality_r(G.a1[i] & SOIL_FERT, rr);
+            uint8_t rr = SOIL_RARITY(i), q = roll_quality_r(W_A1[i] & SOIL_FERT, rr);
             uint8_t n = rr == R_LEGEND ? 3 + (rnd() & 1) : rr + 1;
-            if (crops[crop].regrow) G.a2[i] = (G.a2[i] & SOIL_RAR) | (crops[crop].days - crops[crop].regrow);
-            else { G.a1[i] &= SOIL_WET | SOIL_FERT; G.a2[i] = 0; }
+            // a legendary regrower settles into a rare one after its first crop (docs/BALANCE.md: legendary seeds)
+            if (crops[crop].regrow) W_A2_SET(i, (rr == R_LEGEND ? R_RARE << 6 : W_A2(i) & SOIL_RAR) | (crops[crop].days - crops[crop].regrow));
+            else { W_A1[i] &= SOIL_WET | SOIL_FERT; W_A2_SET(i, 0); }
             redraw_cell(x, y);
             G.stat_harvest++;
             gain_item(crop - 1, q, n);

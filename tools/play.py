@@ -8,7 +8,8 @@ SCRIPT is a string of ';'-separated commands:
   h BTN N    hold BTN for N frames
   s NAME     save screenshot NAME.png (scaled 3x)
   r N CMD    repeat CMD (a single p/h) N times
-  poke OFF V / peek OFF [N]   write / print GameState bytes (offsets: see OFF)
+  poke OFF V / peek OFF [N]   write / print GameState bytes (OFF: a byte offset, or a field name from game.h)
+  go X Y / near CELLTYPE      walk (farm coordinates are real world cells 0..63; the home valley is 16..47)
 """
 import argparse, os, sys
 from pyboy import PyBoy
@@ -44,13 +45,22 @@ import re
 from collections import deque
 _map = open(args.rom.replace('.gbc', '.map')).read()
 GADDR = int(re.search(r'([0-9A-F]{8})\s+_G\b', _map).group(1), 16)
-OFF = dict(cell=3, a1=1027, a2=2051, plots=3075, bld=3077, gold=3289, time=3301, day=3303, season=3304, energy=3306, px=3308, py=3309, facing=3310, scene=3311, tool=3312, wood=3495, stone=3497, style=3321, inv=3325, anim=3157, seeds=3445, year=3305)
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from test_suite import OFF, WW, WH, WB_LIVE   # GameState layout parsed from src/game.h
 WALK = {0, 1, 2, 9, 10, 15, 21}
 DIRS = {'down': (0, 1, 0), 'up': (0, -1, 1), 'left': (-1, 0, 2), 'right': (1, 0, 3)}
 
 
 def mem(name, i=0):
     return pb.memory[GADDR + OFF[name] + i]
+
+
+def cell(x, y):   # the farm world lives in cart SRAM
+    return pb.memory[WB_LIVE, 0xA000 + y * WW + x]
+
+
+def size():
+    return (WW, WH) if mem('scene') == 0xFE else (32, 32)
 
 
 def state():
@@ -77,9 +87,9 @@ def go(tx, ty):
                 break
             for d, (dx, dy, _) in DIRS.items():
                 n = (c[0] + dx, c[1] + dy)
-                if n in prev or not (0 <= n[0] < 32 and 0 <= n[1] < 32):
+                if n in prev or not (0 <= n[0] < size()[0] and 0 <= n[1] < size()[1]):
                     continue
-                if mem('cell', n[1] * 32 + n[0]) not in WALK:
+                if cell(*n) not in WALK:
                     continue
                 prev[n] = (c, d)
                 q.append(n)
@@ -99,13 +109,13 @@ def near(ctype):
     """walk next to the nearest cell of type ctype and face it"""
     x0, y0, _ = state()
     best = None
-    for i in range(1024):
-        if mem('cell', i) != ctype:
+    for i in range(WW * WH):
+        cx, cy = i % WW, i // WW
+        if cell(cx, cy) != ctype:
             continue
-        cx, cy = i % 32, i // 32
         for d, (dx, dy, _) in DIRS.items():
             sx, sy = cx - dx, cy - dy
-            if 0 <= sx < 32 and 0 <= sy < 32 and (mem('cell', sy * 32 + sx) in WALK):
+            if 0 <= sx < WW and 0 <= sy < WH and (cell(sx, sy) in WALK):
                 dist = abs(sx - x0) + abs(sy - y0)
                 if best is None or dist < best[0]:
                     best = (dist, sx, sy, d)
@@ -134,10 +144,12 @@ def run(cmd):
     elif op == 'go':
         go(int(parts[1]), int(parts[2]))
     elif op == 'poke':  # poke OFFSET VALUE (byte offset into GameState)
-        pb.memory[GADDR + int(parts[1])] = int(parts[2])
+        o = OFF[parts[1]] if parts[1] in OFF else int(parts[1])
+        pb.memory[GADDR + o] = int(parts[2])
     elif op == 'peek':  # peek OFFSET [N]: print N bytes of GameState from OFFSET
         n = int(parts[2]) if len(parts) > 2 else 1
-        print('PEEK', parts[1], [pb.memory[GADDR + int(parts[1]) + k] for k in range(n)])
+        o = OFF[parts[1]] if parts[1] in OFF else int(parts[1])
+        print('PEEK', parts[1], [pb.memory[GADDR + o + k] for k in range(n)])
     elif op == 'rich':  # test cheat: lots of gold/wood/stone
         for k, b in enumerate((0x40, 0x42, 0x0F, 0)):
             pb.memory[GADDR + OFF['gold'] + k] = b

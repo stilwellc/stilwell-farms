@@ -14,11 +14,8 @@ static void peek(uint8_t slot) {
     if (!v) s_add("New");
     else if (v == 2) s_add("Old farm");
     else {
-        const GameState *g = (const GameState *)(0xA000 + ((uint16_t)slot << 12));
         static const char *const sn[4] = {"Spr", "Sum", "Fal", "Win"};
-        ENABLE_RAM; SWITCH_RAM(0);
-        s_add(sn[g->season & 3]); s_num(g->day, 0); s_add(" Y"); s_num(g->year, 0);
-        DISABLE_RAM;
+        s_add(sn[save_info[0] & 3]); s_num(save_info[1], 0); s_add(" Y"); s_num(save_info[2], 0);
     }
     lbl_set(slot);
 }

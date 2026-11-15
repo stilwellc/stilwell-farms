@@ -86,15 +86,15 @@ void ui_panel(uint8_t x, uint8_t y, uint8_t w, uint8_t h) BANKED {
     }
 }
 
-// the shop money box, top right: coin + 4 columns inside the border, like the HUD (9999, then 10k..999k);
-// x 13..19 leaves 13 columns for the shop menus beside it
+// the shop money box, top right: coin + 4 columns inside the border, like the HUD (9999, then 10k..999k, and
+// for a millionaire 1000k..9999k over the coin); x 13..19 leaves 13 columns for the shop menus beside it
 void ui_money(void) BANKED {
     uint32_t g = G.gold;
     ui_box(13, 0, 7, 3);
     ui_char(14, 1, GL_COIN);
     s_clr();
     if (g < 10000) s_num(g, 4);
-    else { g /= 1000; s_num(g > 999 ? 999 : g, 3); s_ch('k'); }
-    ui_text(15, 1, sbuf);
+    else { g /= 1000; s_num(g > 9999 ? 9999 : g, 3); s_ch('k'); }
+    ui_text(s_len() > 4 ? 14 : 15, 1, sbuf);
 }
 

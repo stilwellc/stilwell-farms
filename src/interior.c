@@ -22,7 +22,7 @@ static const FurnDef fdef[NUM_FK] = {
     {"Bed", ST_BED, 1, 2, 0, 0, "Sleep: new day"},
     {"TV", MT_TV, 1, 1, 0, 800, "Weather, tips"},
     {"Diary Desk", MT_DESK, 1, 1, 0, 400, "Diary: saves"},
-    {"Fridge", MT_FRIDGE, 1, 1, 0, 1000, "Late snacks"},
+    {"Fridge", MT_FRIDGE, 1, 1, 0, 1000, "Kitchen: cook"},
     {"Rug", ST_RUG, 2, 2, FF_WALK, 300, "Soft and warm"},
     {"House Plant", MT_PLANT, 1, 1, 0, 150, "Fresh & green"},
     {"Bookshelf", MT_BOOKSHELF, 1, 1, 0, 500, "Old almanacs"},
@@ -66,15 +66,18 @@ static void furn_defaults(void) {   // Grandpa left a bed, an old TV and his dia
 }
 
 mt_t interior_mt(uint8_t x, uint8_t y) BANKED {
-    uint8_t k = furn_at(x, y), kind;
-    if (k == 0xFF) return map_mt(WIDX(x, y));
+    uint8_t k, kind;
+    if (IS_BARNIN(scene)) return barn_mt(x, y);   // barn.c
+    k = furn_at(x, y);
+    if (k == 0xFF) return map_mt(MIDX(x, y));
     kind = G.furn[k][0];
     return fdef[kind].mt + (uint8_t)(y - G.furn[k][2]) * fdef[kind].w + (uint8_t)(x - G.furn[k][1]);
 }
 
 uint8_t interior_walk(uint8_t x, uint8_t y) BANKED {
     uint8_t k;
-    if (!(map_kind(WIDX(x, y)) & K_WALK)) return 0;
+    if (!(map_kind(MIDX(x, y)) & K_WALK)) return 0;
+    if (IS_BARNIN(scene)) return 1;   // no furniture in the barn
     k = furn_at(x, y);
     return k == 0xFF || (fdef[G.furn[k][0]].flags & FF_WALK);
 }
@@ -101,8 +104,9 @@ void house_enter(void) BANKED {
 // leaving: always come out one step below the house door, wherever the house was moved to
 void interior_leave(Warp *w) BANKED {
     uint8_t h = bld_find(B_HOUSE);
+    if (IS_BARNIN(scene)) { barn_leave(w); return; }
     if (h != 0xFF) { w->dx = G.bld[h].x + 1; w->dy = G.bld[h].y + 3; }
-    else { w->dx = 10; w->dy = 12; }
+    else { w->dx = FARM_OX + 10; w->dy = FARM_OX + 12; }
     if (w->dy >= WH) w->dy = WH - 1;
     w->dir = D_DOWN;
     building = 0;
@@ -143,10 +147,11 @@ static void go_to_bed(uint8_t k) {
 
 void interior_act(void) BANKED {
     uint8_t x, y, k;
+    if (IS_BARNIN(scene)) { barn_act(); return; }
     if (!front_cell(&x, &y)) return;
     k = furn_at(x, y);
     if (k == 0xFF) {
-        if (map_mt(WIDX(x, y)) == ST_WALL_WINDOW + 1) {
+        if (map_mt(MIDX(x, y)) == ST_WALL_WINDOW + 1) {
             if (G.time >= 1200) say("It's dark out. The farm is sleeping under the stars.");
             else if (G.weather == 1) say("Rain is pattering on the window. The crops are getting a drink.");
             else if (G.weather == 2) say("Snow is drifting past the window.");
@@ -164,8 +169,8 @@ void interior_act(void) BANKED {
         set_speaker("TV");
         s_clr(); s_add("And now the weather. Tomorrow: "); s_add(fc[G.tomorrow & 3]); s_ch('!');
         say(sbuf);
-        say(tips[(uint8_t)(G.day + G.season * 7 + G.year) % 10]);
         ui_speaker = 0;
+        if (!cook_tv()) { set_speaker("TV"); say(tips[(uint8_t)(G.day + G.season * 7 + G.year) % 10]); ui_speaker = 0; }
         break;
     }
     case FK_DESK:
@@ -175,7 +180,7 @@ void interior_act(void) BANKED {
             say("Dear diary... What a day on the farm. (Game saved.)");
         }
         break;
-    case FK_FRIDGE: say("The fridge hums. There's milk, a wedge of cheese, and Grandpa's famous pickles."); break;
+    case FK_FRIDGE: kitchen_open(x, y); break;   // cooking.c
     case FK_SHELF: say("Grandpa's old farming almanacs. Every page is full of his notes."); break;
     case FK_CHAIR: say("You sink into the armchair. Ahh... just for a minute."); break;
     case FK_FIRE: say("The fire crackles and pops. Toasty!"); break;
@@ -203,7 +208,7 @@ static uint8_t cell_ok(uint8_t x, uint8_t y, uint8_t kind) {
     if (x >= sc_w || y >= sc_h) return 0;
     k = furn_at(x, y);
     if (k != 0xFF && k != carry) return 0;
-    i = WIDX(x, y);
+    i = MIDX(x, y);
     if (fdef[kind].flags & FF_WALL) return map_mt(i) == MT_WALL;
     if (!(map_kind(i) & K_WALK) || near_door(x, y)) return 0;
     return !(x == G.px && y == G.py);
@@ -307,6 +312,7 @@ static const char *const fm_names[3] = {"FURNITURE", "MOVE", "SELL BACK"};
 
 uint8_t furn_menu(void) BANKED {
     uint8_t c, r, k, len;
+    if (IS_BARNIN(scene)) { ui_dialog("Furniture is for the house. Your animals like it just the way it is!"); return 0; }
     c = ui_menu(0, 0, 12, fm_names, 3, f_mode);
     if (c == 0xFF) return 0;
     if (c == 0) {

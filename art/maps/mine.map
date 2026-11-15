@@ -1,0 +1,35 @@
+# The mine entrance: up the west road from town. A lamp-lit cave with the lift, the shaft ladder down to
+# floor 1 (H), a minecart on its track and the mine's notice sign. The cave mouth on the east side leads back
+# to town. The floors below are mine_a/b/c (areas.c lays their rocks out on every visit).
+map MINE set=MINE w=16 h=12 music=MINE
+key c MINE_CEIL block
+key # MINE_WALL block
+key t MINE_WALL_TORCH block
+key b MINE_WALL_BEAM block
+key _ MINE_FLOOR3 walk
+key . MINE_FLOOR walk
+key d MINE_DUSK walk
+key D MINE_DAYLIGHT walk
+key H MINE_LADDER walk
+key = MINE_TRACK block
+key m MINE_CART block
+key x MINE_CRATE block
+key s MINE_SIGN block
+key p MINE_PILLAR block
+grid
+cccccccccccccccc
+ccb#t###b#t##bcc
+cc_____________c
+cc_s__________dD
+cc__H_________dD
+cc_____.______cc
+cc__.____.____cc
+cc=========m__cc
+ccx___________cc
+ccxx_.____p_xxcc
+cccccccccccccccc
+cccccccccccccccc
+place MINE_LIFT 7 1 act=LIFT
+act 3 3 MINESIGN
+warp 15 3 TOWN 1 4 right
+warp 15 4 TOWN 1 5 right

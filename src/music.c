@@ -7,6 +7,7 @@ extern const uint16_t sq_freq[84];   // in the music data bank (mapped while not
 extern const uint16_t wv_freq[84];
 
 uint8_t music_on;
+uint8_t music_cur = 0xFF;          // last song started (main.c: music_for_scene keeps a song that is already playing)
 static SongDef song;
 static uint8_t song_bank, fc;
 static const uint8_t *ptr[4];
@@ -25,6 +26,7 @@ void music_stop(void) {
 void music_play(uint8_t id) {
     uint8_t c, save;
     music_stop();
+    music_cur = id;
     if (id == MUS_NONE || !G.opt_music) return;
     music_get(id, &song);
     song_bank = BANK(music_get);

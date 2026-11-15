@@ -29,11 +29,17 @@ uint16_t item_value(uint8_t it, uint8_t q) BANKED {
     return v;
 }
 
+// collection log: a bit per item
+static uint8_t *ship_byte(uint8_t it) { return &G.shipped[it >> 3]; }
 void mark_shipped(uint8_t it) BANKED {
-    G.shipped[it >> 3] |= 1 << (it & 7);
+    *ship_byte(it) |= 1 << (it & 7);
+}
+uint8_t is_shipped(uint8_t it) BANKED {
+    return (*ship_byte(it) & (1 << (it & 7))) ? 1 : 0;
 }
 
 uint8_t spend_energy(uint8_t e) BANKED {
+    if ((G.buff & BUFF_HEARTY) && (rnd() & 1)) e >>= 1;   // Hearty dish: about half the cost
     if (G.energy < e) {
         say("You're too tired to work. Eat something or get some sleep!");
         return 0;

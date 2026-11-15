@@ -1,0 +1,33 @@
+# Inside a barn (barn.c). Six stalls along the back: the manger behind each stall (row 2) fills with hay
+# once that animal is fed; cows and sheep stand in their stall (row 3). The hay stack fills the mangers.
+# Walls and floor are drawn in the farm's building style (barn.c swaps the CLASSIC tiles).
+# The doorway leads back out to the barn door, wherever that barn stands. (File name sorts after town.)
+map BARN set=INTERIOR w=12 h=9 music=NONE
+key L WALL_SIDE_L block
+key R WALL_SIDE_R block
+key T BARN_BEAM block
+key l BARN_BEAM_LAMP block
+key W BARN_WALL_CLASSIC block
+key . BARN_FLOOR_CLASSIC walk
+key M MANGER_EMPTY block
+key S STALL block
+key X WALL_FRONT block
+key C WALL_CORNER_L block
+key D WALL_CORNER_R block
+key [ BARN_DOOR_L walk
+key ] BARN_DOOR_R walk
+grid
+LTTlTTTTlTTR
+LWWWWWWWWWWR
+LMMMMMM....R
+LSSSSSS....R
+L..........R
+L..........R
+L..........R
+L..........R
+CXXXX[]XXXXD
+place BARN_TOOLS 7 2
+place HAY_STACK 8 2
+place MILK_CANS 10 2
+warp 5 8 FARM 0 0 down
+warp 6 8 FARM 0 0 down

@@ -2,6 +2,8 @@
 # Drawn as semantic-colour sketches and solved to ONE BG palette per 8x8 tile (see palmap).
 
 # Grandpa (letters): gold straw hat, white beard, denim jacket
+# portraits are menu art only: far tables (gen_art.py)
+far
 meta PORTRAIT_GRANDPA w=2 h=2 pal=UI palmap=UUUU/UWWU/UTTU/UTTU
 13333333333333333333333333333331
 31111111111333333333311111111113
@@ -282,6 +284,7 @@ meta PORTRAIT_PET w=2 h=2 pal=WOOD palmap=WWWW/WWWW/WWWW/WRRW
 03333333333333333333333333333330
 
 # minimap quadrants (each 8x8 = one 2x2-cell map tile): TL grass, TR water, BL trees, BR crops
+near
 meta MINIMAP_A w=1 h=1 pal=GRASS palmap=GT/GC
 1111111122222222
 1110111121012222

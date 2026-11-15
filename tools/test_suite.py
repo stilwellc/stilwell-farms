@@ -67,7 +67,7 @@ def _parse_enums(text):
             CONST[name.strip()] = v
 
 
-for _f in ('art.h', 'maps.h', 'game.h', 'decor.h', 'interior.c', 'menus.c', 'actors.c'):
+for _f in ('art.h', 'maps.h', 'game.h', 'decor.h', 'designer.h', 'interior.c', 'menus.c', 'actors.c'):
     _t = _src(_f)
     _parse_defines(_t)
     _parse_enums(_t)
@@ -140,7 +140,12 @@ DECOR_WALK = {k for k, d in enumerate(DECOR) if d[1] == '1'}
 _world_c = _src('world.c')
 BW = _ints(_table(_world_c, 'bw'))
 BH = _ints(_table(_world_c, 'bh'))
-PLOT_PRICE = _ints(_table(_world_c, 'plot_prices'))
+PLOT_PRICE = _ints(_table(_world_c, 'plot_prices'))     # 64 plots (8x8 grid)
+
+
+def OLD_PLOT(p):
+    """plot p of the old 4x4 grid (the home valley) as a plot of the 8x8 grid"""
+    return ((p >> 2) + 2) * 8 + (p & 3) + 2
 _menus_c = _src('menus.c')
 CAT_N = _ints(_table(_menus_c, 'cat_n'))
 BLDG_GOLD = _ints(_table(_menus_c, 'bldg_gold'))
@@ -154,17 +159,80 @@ BIZ_PRICE = _ints(_table(_biz_c, 'biz_price'))
 BIZ_UP_PRICE = _ints(_table(_biz_c, 'up_price'))
 BIZ_CAP = _ints(_table(_biz_c, 'cap_tab'))
 BIZ_SPOT = list(zip(_ints(_table(_biz_c, 'spot_x')), _ints(_table(_biz_c, 'spot_y'))))
-BIZ_PAN = [[CONST[n.strip()] for n in row.split(',')] for row in re.findall(r'\{([^{}]*)\}', _table(_biz_c, 'pan_item'))]
+BIZ_MENU_N = len(re.findall(r'"[^"]*"', _table(_biz_c, 'bm')))           # Stock Status Kitchen Facade Staff Bye
+BIZ_TIER_PRICE = _ints(_table(_biz_c, 'tier_price'))
+BIZ_BQ = _ints(_table(_biz_c, 'bq_base'))             # basic product: ingredient x (bq + kitchen level) / 4
+BIZ_PQ = _ints(_table(_biz_c, 'pq_base'))             # premium: ingredients' total x (pq + level) / 4
+_bdef = dict(re.findall(r'#define (BIZ_PCT_\w+|INN_RATE) (\d+)', _biz_c))
+BIZ_PCT_TIER, BIZ_PCT_PROSP, BIZ_PCT_MGR, BIZ_PCT_INN, INN_RATE = (int(_bdef[k]) for k in (
+    'BIZ_PCT_TIER', 'BIZ_PCT_PROSP', 'BIZ_PCT_MGR', 'BIZ_PCT_INN', 'INN_RATE'))
+MACHINE_DAYS = [int(d) for d in re.findall(r'days = (\d+);', _nocomment(_src('farm.c')))]   # keg, press, jar
+LOT_X = _ints(_table(_biz_c, 'lot_x'))
+_invest_c = _src('invest.c')
+TPROJ = [tuple(_ints(row)) for row in re.findall(r'\{([\d, ]+)\}', _table(_invest_c, 'tproj'))]   # gold wood stone need_p market
+BIZ_PAN = [[CONST.get(n.strip(), 0xFF) for n in row.split(',')] for row in re.findall(r'\{([^{}]*)\}', _table(_biz_c, 'pan_item'))]
 _staff_c = _src('staff.c')
 WAGE_BASE = _ints(_table(_staff_c, 'wage_base'))
 WAGE_PLOT = _ints(_table(_staff_c, 'wage_plot'))
 _town_c = _src('town.c')
+# the mine + beach (areas.c): rock kinds and beach finds are hashes, mirrored here to plan routes and pick targets
+_areas_c = _src('areas.c')
+MINE_ODDS = [_ints(r) for r in re.findall(r'\{([^{}]*)\}', _table(_areas_c, 'odds'))]
+MINE_ODDS_KIND = [CONST.get(n.strip(), None) for n in _table(_areas_c, 'odds_kind').split(',') if n.strip()]
+BEACH_SPOTS = list(zip(_ints(_table(_areas_c, 'spot_x')), _ints(_table(_areas_c, 'spot_y'))))
+MINE_HOLE = (4, 4)                      # mine.map: the shaft ladder (H) down to floor 1
+GEM_ITEMS = [CONST['I_GEM' if n.strip() == 'I_AMETHYST' else n.strip()] for n in _table(_areas_c, 'gem_item').split(',') if n.strip()]
+
+
+def mix8(v):
+    v ^= (v << 3) & 255
+    v ^= v >> 5
+    v = (v + 0x9B) & 255
+    v ^= (v << 2) & 255
+    return v
+
+
+def mine_band(floor):
+    return 0 if floor <= 5 else 1 if floor <= 10 else 2 if floor <= 15 else 3
+
+
+def rock_kind(x, y, seed, floor):
+    """areas.c rock_kind: 0 rock 1 rock2 2 copper 3 iron 4 gold 5 coal 6 gem node"""
+    h = mix8(mix8((x << 4) | y) ^ seed)
+    for k, o in enumerate(MINE_ODDS[mine_band(floor)]):
+        if h < o:
+            return [6, 4, 3, 2, 5][k]
+    return 1 if h & 1 else 0
+
+
+def beach_item(k, stamp, taken):
+    """areas.c spot_item: what lies on beach spot k (None: nothing)"""
+    if taken & (1 << k):
+        return None
+    h = mix8(mix8((stamp + k * 37) & 255) ^ ((k << 5) & 255))
+    if k < 6 and not (h & 3):
+        return None
+    h >>= 2
+    if k >= 6:
+        return I_CORAL if h < 24 else I_SHELL if h < 44 else I_SEAGLASS
+    return I_SHELL if h < 26 else I_SEAGLASS if h < 40 else I_DRIFTWOOD if h < 52 else I_CORAL
 STORE_N = len(re.findall(r'"[^"]*"', _table(_town_c, 'store_items')))
+HALL_N = len(re.findall(r'"[^"]*"', _table(_src('staff.c'), 'hall_items'))) - 1   # Hollis's menu; + 1 on a festival day
+FARM_N = len(re.findall(r'"[^"]*"', _table(_src('menus.c'), 'farm_items')))        # START > FARM
 TIER_GOLD = _ints(_table(_town_c, 'tier_gold'))
 CAFE_PRICE = _ints(_table(_town_c, 'price'))
 BREED_PRICE = [_ints(r) for r in re.findall(r'\{([^{}]*)\}', _table(_town_c, 'breed_price'))]
 RAR_MULT = _ints(_table(_town_c, 'rar_mult'))
+LEGEND_EARNED = int(re.search(r'#define LEGEND_EARNED (\d+)', _town_c).group(1))   # Rosa's legendary stock unlocks
 SCENE_FARM = CONST['SCENE_FARM']
+# The farm world is 64x64 cells in cart SRAM (bank WB_LIVE: cell at 0xA000, a1 at 0xB000; bank WB_A2: a2 at
+# 0xA000). Scenarios address the farm in the old 32x32 home-valley frame: farm coordinates passed to and returned
+# by the driver (cell/a1/a2/setcell/owned/walkable/go/pos/bld/actors) are real cells minus FO, so the home valley
+# is 0..31 as it always was and the outer valley is -16..-1 and 32..47. Real coordinates: wcell/wa1/wa2 and
+# real_pos. u8/w8 of 'cell'/'a1'/'a2' with an index y*32+x and u16('plots') keep reading the home valley the old way.
+WW, WH, FO = CONST['WW'], CONST['WH'], CONST['FARM_OX']
+WB_LIVE, WB_A2 = CONST['WB_LIVE'], CONST['WB_A2']
+RAM_SIZE = 16 * 0x2000                 # 128KB battery file (16 banks)
 DIRS = {'down': (0, 1, D_DOWN), 'up': (0, -1, D_UP), 'left': (-1, 0, D_LEFT), 'right': (1, 0, D_RIGHT)}
 DIRNAME = {v[2]: k for k, v in DIRS.items()}
 HANG_FRAMES = 420
@@ -201,8 +269,14 @@ def map_warps(map_id):
 def map_kind(map_id):
     """walkability (K_* bits) of a static map, from the generated src/maps.c (m<id>_kind)"""
     src = open(os.path.join(ROOT, 'src/maps.c')).read()
-    m = re.search(r'm%d_kind\[1024\] = \{([^}]*)\}' % map_id, src)
-    return [int(v) for v in m.group(1).split(',')]
+    w, h, stride = (int(v) for v in re.search(r'// m%d: \w+ w=(\d+) h=(\d+) stride=(\d+)' % map_id, src).groups())
+    m = re.search(r'm%d_kind\[\d+\] = \{([^}]*)\}' % map_id, src)
+    rows = [int(v) for v in m.group(1).split(',')]
+    out = [0] * 1024
+    for y in range(h):
+        for x in range(w):
+            out[y * 32 + x] = rows[y * stride + x]
+    return out
 
 
 # ------------------------------------------------------------------ the driver
@@ -213,9 +287,16 @@ class Game:
         self.G = self.sym['_G']
         nxt = min(a for n, a in self.sym.items() if a > self.G and n.startswith('_') and not n.startswith('__'))
         assert nxt - self.G == GSIZE, f'GameState layout mismatch: _G is {nxt - self.G} bytes, game.h says {GSIZE}'
+        self.noi = {}                   # full symbol list (bank << 16 | addr), for hooks on any function
+        if os.path.exists(rom.replace('.gbc', '.noi')):
+            for line in open(rom.replace('.gbc', '.noi')):
+                m = re.match(r'DEF _(\w+) 0x([0-9A-Fa-f]+)', line)
+                if m:
+                    self.noi[m.group(1)] = int(m.group(2), 16)
         self.WAIT_LO = self.sym['_wait_vbl']
         self.WAIT_HI = self.WAIT_LO + 0x30
-        self.kinds = {m: map_kind(m) for m in (MAP_TOWN, MAP_HOUSE1, MAP_HOUSE2)}
+        self.kinds = {m: map_kind(m) for m in (MAP_TOWN, MAP_HOUSE1, MAP_HOUSE2, MAP_BARN, MAP_COOP, MAP_MINE, MAP_MINE_A,
+                                               MAP_MINE_B, MAP_MINE_C, MAP_BEACH)}
         self.tk = self.kinds[MAP_TOWN]
         self.outdir = outdir
         self.pb = None
@@ -235,6 +316,7 @@ class Game:
         self.frames = 0
         self.vbl_calls = 0
         self.morning_shot = None
+        self.morning_find = None
         self.pb.hook_register(0, self.WAIT_LO, self._on_wait, None)
 
     def _on_wait(self, _ctx):
@@ -295,9 +377,13 @@ class Game:
         return self.G + OFF[name] + i
 
     def u8(self, name, i=0):
+        if name in ('cell', 'a1', 'a2'):           # old 32x32 index into the home valley
+            return getattr(self, name)(i % 32, i // 32)
         return self.pb.memory[self.addr(name, i)]
 
     def u16(self, name, i=0):
+        if name == 'plots':                         # the home valley's 16 old plots as the old bitmask
+            return sum(1 << p for p in range(16) if self.plot_owned(((p >> 2) + 2) * 8 + (p & 3) + 2))
         a = self.addr(name, i)
         return self.pb.memory[a] | (self.pb.memory[a + 1] << 8)
 
@@ -306,6 +392,10 @@ class Game:
         return sum(self.pb.memory[a + k] << (8 * k) for k in range(4))
 
     def w8(self, name, v, i=0):
+        if name in ('cell', 'a1', 'a2'):
+            x, y = i % 32 + FO, i // 32 + FO
+            self.pb.memory[WB_A2 if name == 'a2' else WB_LIVE, (0xB000 if name == 'a1' else 0xA000) + y * WW + x] = v & 0xFF
+            return
         self.pb.memory[self.addr(name, i)] = v & 0xFF
 
     def w16(self, name, v, i=0):
@@ -318,23 +408,58 @@ class Game:
         for k in range(4):
             self.pb.memory[a + k] = (v >> (8 * k)) & 0xFF
 
+    def sbuf(self):
+        """the UI text buffer (ui.c sbuf) as a string"""
+        b = bytes(self.pb.memory[self.sym['_sbuf'] + k] for k in range(96))
+        return b.split(b'\0')[0].decode('latin1')
+
     def sym8(self, name, i=0):
         return self.pb.memory[self.sym[name] + i]
 
     def symw8(self, name, v, i=0):
         self.pb.memory[self.sym[name] + i] = v
 
+    # ---- the farm world (SRAM). w*: real cells 0..63; the rest: the home-valley frame (real - FO)
+    def wcell(self, x, y):
+        return self.pb.memory[WB_LIVE, 0xA000 + y * WW + x]
+
+    def wa1(self, x, y):
+        return self.pb.memory[WB_LIVE, 0xB000 + y * WW + x]
+
+    def wa2(self, x, y):
+        return self.pb.memory[WB_A2, 0xA000 + y * WW + x]
+
+    def wset(self, x, y, c, a1=0, a2=0):
+        self.pb.memory[WB_LIVE, 0xA000 + y * WW + x] = c
+        self.pb.memory[WB_LIVE, 0xB000 + y * WW + x] = a1
+        self.pb.memory[WB_A2, 0xA000 + y * WW + x] = a2
+
+    def world(self):
+        """the whole live world: cell + a1 (bank WB_LIVE) and a2 (bank WB_A2) as bytes"""
+        m = self.pb.memory
+        return bytes(m[WB_LIVE, 0xA000:0xBFFF]) + bytes([m[WB_LIVE, 0xBFFF]]) + bytes(m[WB_A2, 0xA000:0xB000])
+
     def cell(self, x, y):
-        return self.u8('cell', y * 32 + x)
+        return self.wcell(x + FO, y + FO)
 
     def a1(self, x, y):
-        return self.u8('a1', y * 32 + x)
+        return self.wa1(x + FO, y + FO)
 
     def a2(self, x, y):
-        return self.u8('a2', y * 32 + x)
+        return self.wa2(x + FO, y + FO)
 
     def setcell(self, x, y, c, a1=0, a2=0):
-        self.w8('cell', c, y * 32 + x); self.w8('a1', a1, y * 32 + x); self.w8('a2', a2, y * 32 + x)
+        self.wset(x + FO, y + FO, c, a1, a2)
+
+    def seta2(self, x, y, v):
+        self.pb.memory[WB_A2, 0xA000 + (y + FO) * WW + x + FO] = v
+
+    def plot_owned(self, p):
+        """new plot index 0..63 (8x8 grid of 8x8 cells)"""
+        return (self.u8('plots', p >> 3) >> (p & 7)) & 1
+
+    def plots_n(self):
+        return sum(bin(self.u8('plots', k)).count('1') for k in range(8))
 
     def inv(self, it, q=None):
         if q is None:
@@ -342,7 +467,10 @@ class Game:
         return self.u8('inv', it * 3 + q)
 
     def bld(self, k):
-        return tuple(self.u8('bld', k * BLD_SIZE + j) for j in range(4))
+        b = [self.u8('bld', k * BLD_SIZE + j) for j in range(4)]
+        if b[0] != 0xFF:
+            b[1] -= FO; b[2] -= FO
+        return tuple(b)
 
     def bld_find(self, t):
         for k in range(MAX_BLD):
@@ -386,11 +514,17 @@ class Game:
                 return (k, kind, fx, fy)
         return None
 
-    def pos(self):
+    def real_pos(self):
         return self.u8('px'), self.u8('py')
 
+    def pos(self):
+        """position; on the farm in the home-valley frame"""
+        o = FO if self.u8('scene') == SCENE_FARM else 0
+        return self.u8('px') - o, self.u8('py') - o
+
     def owned(self, x, y):
-        return (self.u16('plots') >> (((y >> 3) << 2) | (x >> 3))) & 1
+        x, y = x + FO, y + FO
+        return (self.u8('plots', y >> 3) >> (x >> 3)) & 1 if 0 <= x < WW and 0 <= y < WH else 0
 
     def rich(self):
         self.w32('gold', 900000)
@@ -520,14 +654,22 @@ class Game:
         b = self.sym['_act_kind']
         m = self.pb.memory
         n = MAX_ACT
-        return [(m[b + k], m[b + n + k], m[b + 2 * n + k], m[b + 3 * n + k]) for k in range(n) if m[b + k]]
+        o = FO if self.u8('scene') == SCENE_FARM else 0
+        return [(m[b + k], m[b + n + k], m[b + 2 * n + k] - o, m[b + 3 * n + k] - o) for k in range(n) if m[b + k]]
 
     def shoo_pet(self):
         """test-only: put the pet on the player's own cell so it stops blocking a corridor"""
         b, n = self.sym['_act_kind'], MAX_ACT
         for k in range(n):
             if self.pb.memory[b + k] == K_PET:
-                self.pb.memory[b + 2 * n + k], self.pb.memory[b + 3 * n + k] = self.pos()
+                self.pb.memory[b + 2 * n + k], self.pb.memory[b + 3 * n + k] = self.real_pos()
+
+    def park_pet(self):
+        """test-only: take the pet off the field until the next scene change (it follows you into build spots)"""
+        b = self.sym['_act_kind']
+        for k in range(MAX_ACT):
+            if self.pb.memory[b + k] == K_PET:
+                self.pb.memory[b + k] = 0
 
     def actor_at(self, x, y):
         for a in self.actors():
@@ -536,18 +678,35 @@ class Game:
         return None
 
     def walkable(self, x, y, scene=None):
-        if not (0 <= x < 32 and 0 <= y < 32):
+        scene = self.u8('scene') if scene is None else scene
+        if scene == SCENE_FARM:
+            if not (-FO <= x < WW - FO and -FO <= y < WH - FO):
+                return False
+        elif not (0 <= x < 32 and 0 <= y < 32):
             return False
         if self.actor_at(x, y):
             return False
-        scene = self.u8('scene') if scene is None else scene
+        if scene in (MAP_BARN, MAP_COOP):               # barn.c: no furniture in barns
+            return bool(self.kinds[scene][y * 32 + x] & K_WALK)
         if scene in (MAP_HOUSE1, MAP_HOUSE2):
             if not self.kinds[scene][y * 32 + x] & K_WALK:
                 return False
             f = self.furn_at(x, y)
             return f is None or f[1] == FK_RUG
         if scene != SCENE_FARM:
-            return y < 24 and bool(self.tk[y * 32 + x] & K_WALK)
+            if not self.kinds.get(scene, self.tk)[y * 32 + x] & K_WALK:
+                return False
+            if scene == MAP_TOWN and y >= MK_GATE_Y and not self.u8('mk_flags') & MK_OPEN:
+                return False                     # Market Street: closed until bought (main.c walkable)
+            if scene in (MAP_MINE_A, MAP_MINE_B, MAP_MINE_C) and (self.rock_at(x, y) or (x, y) == self.ladder()):
+                return False                     # (the open ladder is walkable, but stepping on it goes down)
+            if scene == MAP_MINE and (x, y) == MINE_HOLE:
+                return False                     # the shaft ladder down to floor 1
+            if scene == MAP_BEACH:
+                for k, (sx, sy) in enumerate(BEACH_SPOTS[:6]):
+                    if (sx, sy) == (x, y) and beach_item(k, self.u8('beach_stamp'), self.u8('beach_taken')) is not None:
+                        return False
+            return True
         c = self.cell(x, y)
         if c == C_ROAD:
             return True
@@ -556,6 +715,18 @@ class Game:
         if c == C_DECOR:
             return self.a1(x, y) in DECOR_WALK
         return c in (C_GRASS, C_GRASS2, C_WILDFLOWER, C_DIRT, C_SOIL, C_SAND)
+
+    # ---- the mine (areas.c globals)
+    def rock_at(self, x, y):
+        if x >= 16 or y >= 16:
+            return False
+        return bool(self.sym8('_mn_rocks', (y << 1) | (x >> 3)) & (1 << (x & 7)))
+
+    def rocks(self):
+        return [(x, y) for y in range(16) for x in range(16) if self.rock_at(x, y)]
+
+    def ladder(self):
+        return self.sym8('_mn_lad_x'), self.sym8('_mn_lad_y')
 
     def face(self, d):
         for _ in range(8):
@@ -607,6 +778,8 @@ class Game:
                     blocked.clear()
                     if retries >= 3:             # the pet loves to sit in one-tile corridors: lift it
                         self.shoo_pet()
+                    if retries >= 6:             # still there (it follows you back in): off the field for now
+                        self.park_pet()
                     self.tick(90)
                     continue
                 self.shot('no_path')
@@ -717,6 +890,17 @@ class Game:
         if self.morning_shot:
             self.shot(self.morning_shot)
             self.morning_shot = None
+        if self.morning_find:            # (text, shot): page through the report to the line containing text
+            want, name = self.morning_find
+            self.morning_find = None
+            for _ in range(60):
+                if want in self.sbuf():
+                    self.tick(40)
+                    self.shot(name)
+                    break
+                if not self.ui_open():
+                    break
+                self.press('a'); self.tick(4)
         self.dismiss()
         self.wait_field()
 
@@ -790,7 +974,7 @@ def s_intro(c, g):
     g.wait_menu(1, 9, 3)
     g.shot('slots')
     g.choose(1, 9, 3, 0)
-    g.tick(90)
+    g.tick(140)                         # world_new draws the whole 64x64 valley first (~40 frames)
     g.shot('grandpa')
     c.eq(g.u8('scene'), SCENE_FARM, 'scene after new game')
     g.yesno(True, advance='a')          # name the farm
@@ -820,9 +1004,19 @@ def s_intro(c, g):
 
 
 # ------------------------------------------------------------------ shared helpers
+def realtor_list(g):
+    """the land office's plots in menu order: up to 10 for sale, those bordering your land first"""
+    def near(p):
+        x, y = p & 7, p >> 3
+        return any(0 <= x + dx < 8 and 0 <= y + dy < 8 and g.plot_owned((y + dy) * 8 + x + dx)
+                   for dx, dy in ((-1, 0), (1, 0), (0, -1), (0, 1)))
+    free = [p for p in range(64) if not g.plot_owned(p)]
+    return ([p for p in free if near(p)] + [p for p in free if not near(p)])[:10]
+
+
 def to_town(g):
-    g.go(15, 30)
-    g.step('down')                      # arriving on y=31 facing down warps
+    g.go(15, WH - FO - 2)
+    g.step('down')                      # arriving on the farm's last row (y=63) facing down warps
     if g.u8('scene') != MAP_TOWN:
         g.face('down')
         g.press('down', 4, 10)
@@ -943,7 +1137,7 @@ def s_crops(c, g):
     g.sleep()
     g.shot('day2')
     c.eq(g.u8('day'), 2, 'slept to day 2')
-    c.eq(g.u16('time'), 360, 'morning time')
+    c.check(360 <= g.u16('time') < 400, f"morning time ({g.u16('time')}; the walk out of the house may tick the clock)")
     c.eq(g.a2(10, 14), 1, 'watered radish grew one day')
     c.eq(g.a1(10, 14) & 0x80, 0 if g.u8('weather') not in (1, 3) else 0x80, 'soil dries overnight (unless rain)')
     # fast-forward growth: 3 of 4 days grown, water, sleep -> ripe
@@ -1015,7 +1209,7 @@ def s_buy_plot(c, g):
     g.shot('bought')
     g.dismiss()
     c.check(g.u16('plots') & (1 << 13), 'plot 13 owned')
-    c.eq(g.u32('gold'), 5000 - PLOT_PRICE[13], 'paid the South Pasture price')
+    c.eq(g.u32('gold'), 5000 - PLOT_PRICE[OLD_PLOT(13)], 'paid the South Pasture price')
     c.check(g.u32('goals') & 8, 'more-land goal')
     # walk into the new land
     for (x, y) in [(12, 24), (11, 26), (10, 28)]:
@@ -1154,6 +1348,7 @@ def s_build_all(c, g):
             build_poke(g, cat, sel)
             g.go_face(x, y - 1, 'down')
             before = g.u32('gold'), g.u16('wood'), g.u16('stone')
+            g.park_pet()                          # the dog likes to sit in the spot
             g.act(); g.tick(8)
             if g.ui_open():
                 g.dismiss()
@@ -1212,6 +1407,25 @@ def s_move_remove(c, g):
     g.shot('after_remove')
 
 
+@scenario('music_no_hitch')
+def s_music_hitch(c, g):
+    """the music keeps time through a scene load (the LCD is off then: the timer interrupt ticks it)"""
+    ticks = []
+    a = g.noi['music_tick']
+    g.pb.hook_register(0, a, lambda _: ticks.append(g.pb._cycles()), None)
+    try:
+        g.tick(30)
+        c0 = len(ticks)
+        to_town(g)
+        F = 70224 * 2
+        gaps = [(b - a) / F for a, b in zip(ticks[c0:], ticks[c0 + 1:])]
+        c.check(len(gaps) > 100, f'music ticked through the trip ({len(gaps)} ticks)')
+        c.check(max(gaps) < 2.5, f'longest pause between music ticks {max(gaps):.2f} frames (was ~11 while loading)')
+        c.note(f'longest music gap farm->town: {max(gaps):.2f} frames')
+    finally:
+        g.pb.hook_deregister(0, a)
+
+
 @scenario('town_trip')
 def s_town_trip(c, g):
     to_town(g)
@@ -1231,7 +1445,7 @@ def s_town_trip(c, g):
     g.dismiss()
     c.eq(g.sym8('_building'), 0, 'no build mode in town')
     to_farm(g)
-    c.eq(g.pos(), (15, 30), 'back on the farm road')
+    c.eq(g.pos(), (15, WH - FO - 2), 'back on the farm road')
     g.shot('home')
 
 
@@ -1369,14 +1583,18 @@ def s_cafe_realtor(c, g):
     c.eq(g.u32('gold'), 5000 - CAFE_PRICE[0], 'coffee price')
     g.go_face(24, 14, 'up')
     g.act()
-    g.wait_menu(0, 3, 12)
+    lst = realtor_list(g)
+    g.wait_menu(0, 0, len(lst))
     g.shot('realtor')
-    g.choose(0, 3, 12, 9)               # South Pasture
+    names = [bytes(g.pb.memory[g.sym['_lbl'] + k * 19 + j] for j in range(18)).split(b'\0')[0].decode('latin1') for k in range(len(lst))]
+    c.check(any(n.startswith('South Pasture') for n in names), f'full plot names in the land list: {names}')
+    c.eq(len(set(names)), len(names), f'every row of the land list reads differently: {names}')
+    g.choose(0, 0, len(lst), lst.index(OLD_PLOT(13)))   # South Pasture
     g.wait_menu(14, YN_Y, 2)
     g.shot('buy_prompt')
     g.yesno(True); g.tick(20); g.dismiss()
     c.check(g.u16('plots') & (1 << 13), 'bought South Pasture at the land office')
-    c.eq(g.u32('gold'), 5000 - CAFE_PRICE[0] - PLOT_PRICE[13], 'paid the South Pasture price')
+    c.eq(g.u32('gold'), 5000 - CAFE_PRICE[0] - PLOT_PRICE[OLD_PLOT(13)], 'paid the South Pasture price')
 
 
 @scenario('board_hall_fountain', base='town')
@@ -1393,15 +1611,15 @@ def s_board(c, g):
     c.eq(g.u32('gold'), 5000 + ITEM_PRICE[it] * qty * 2, 'request reward')
     c.eq(g.u8('friend', npc), 20, 'requester likes you more')
     # hall, ordinary day
-    g.go_face(16, 9, 'up'); g.act(); g.choose(0, 0, 4, 0); g.tick(20); g.shot('hall'); g.dismiss()
+    g.go_face(16, 9, 'up'); g.act(); g.choose(0, 0, HALL_N, 0); g.tick(20); g.shot('hall'); g.dismiss()
     # spring festival with 8 flower beds
     g.w8('day', 14)
     for k in range(8):
         g.setcell(8 + k, 15, C_DECOR, DK_FLOWERBED)
     gold = g.u32('gold')
-    g.go_face(16, 9, 'up'); g.act(); g.choose(0, 0, 4, 0); g.tick(20); g.shot('festival'); g.dismiss()
-    c.eq(g.u32('gold'), gold + 500, 'flower show prize')
-    c.check(g.u8('festival_won') & 1, 'festival won flag')
+    g.go_face(16, 9, 'up'); g.act(); g.choose(0, 0, HALL_N + 1, 0); g.tick(20); g.shot('festival'); g.dismiss()
+    c.eq(g.u32('gold'), gold + 500, 'flower show best-garden prize')
+    c.check(g.u8('fest_done') & 0x10, 'best garden award (the egg hunt itself is fest_egg_hunt)')
     # fountain
     gold = g.u32('gold')
     g.go_face(15, 13, 'up'); g.act()
@@ -1583,8 +1801,8 @@ def s_machines(c, g):
     for day in range(5):
         g.sleep()
         ready.append([bool(g.a2(x, 17) & 0x80) for x in (9, 10, 11)])
-    c.eq(ready, [[False, True, False], [False, True, True], [False, True, True], [False, True, True], [True, True, True]],
-         'keg 5 days, press 1, jar 2')
+    want = [[d + 1 >= MACHINE_DAYS[k] for k in range(3)] for d in range(5)]
+    c.eq(ready, want, f'keg {MACHINE_DAYS[0]} days, press {MACHINE_DAYS[1]}, jar {MACHINE_DAYS[2]}')
     g.go(10, 16)
     g.shot('ready')
     for x in (9, 10, 11):
@@ -1638,6 +1856,7 @@ def s_mail(c, g):
     c.check(g.u32('mail') & 1, 'letter waiting after the first harvest')
     g.sleep_shots = True
     g.sleep()
+    clear_area(g, 8, 8, 14, 8)          # overnight growth can wall in the mailbox nook
     gold = g.u32('gold')
     g.go_face(13, 9, 'left')
     g.act()
@@ -1675,11 +1894,11 @@ def s_menus(c, g):
         g.tick(30)
         g.shot(name)
         g.dismiss()
-    for k, name in enumerate(('status', 'map', 'calendar', 'friends', 'goods', 'staff')):
+    for k, name in enumerate(('status', 'map', 'calendar', 'friends', 'goods', 'staff', 'valley')):
         open_start(g, 4)
         if name == 'calendar':
             g.w8('req_qty', 3); g.w8('req_day', 5)
-        g.choose(8, 2, 7, k)
+        g.choose(8, 2, FARM_N, k)
         g.tick(40)
         g.shot(name)
         if name == 'calendar':
@@ -1688,6 +1907,113 @@ def s_menus(c, g):
             c.eq(marks.count(GL_CAL_DOT), 1, 'one request-due dot (day 6)')
         g.dismiss()
     c.check(not g.ui_open(), 'menus closed')
+
+
+def vm_kind(g, x, y, own):
+    """uipages.c vm_kind: what the valley map shows for the 4x4 cells at real (x, y)"""
+    n = {}
+    rows = []
+    for j in range(4):
+        wr = 0
+        for i in range(4):
+            c, a = g.wcell(x + i, y + j), g.wa1(x + i, y + j)
+            k = {C_WILDFLOWER: 'flower', C_ROCK: 'rock', C_BOULDER: 'rock', C_ORE: 'rock', C_FOREST: 'woods',
+                 C_PINE: 'woods', C_BIRCH: 'woods', C_BUSH: 'woods', C_SAPLING_WILD: 'woods', C_DIRT: 'path',
+                 C_SOIL: 'soil', C_GIANT: 'soil', C_TREE: 'tree', C_STRUCT: 'bldg', C_MACHINE: 'bldg',
+                 C_WATER: 'water', C_ROAD: 'road', C_SAND: 'sand', C_CLIFF: 'cliff'}.get(c)
+            if c == C_DECOR:
+                k = 'road' if a == DK_BRIDGE else 'path' if a in DECOR_WALK else None
+            if k == 'water':
+                wr |= 1 << i
+            n[k] = n.get(k, 0) + 1
+        rows.append(wr)
+    wcol = rows[0] & rows[1] & rows[2] & rows[3]
+    if n.get('bldg'): return 'bldg'
+    if n.get('road'): return 'path'
+    if n.get('water', 0) >= 8 or 15 in rows or wcol: return 'water'
+    if n.get('water', 0) >= 2: return 'sand' if n.get('sand') else 'marsh'
+    if n.get('cliff', 0) >= 2: return 'cliff'
+    if n.get('soil', 0) >= 2: return 'crops'
+    if n.get('tree', 0) >= 2 or (n.get('tree') and own): return 'orchard'
+    if n.get('woods', 0) >= 6: return 'woods'
+    if n.get('rock', 0) >= 5: return 'rocks'
+    if n.get('sand', 0) >= 6: return 'sand'
+    if n.get('path', 0) >= 3: return 'path'
+    if n.get('flower', 0) >= 5: return 'flowers'
+    return 'meadow'
+
+
+def open_map(g):
+    open_start(g, 4)
+    g.choose(8, 2, FARM_N, 1)
+    g.tick(8)
+
+
+@scenario('valley_map')
+def s_valley_map(c, g):
+    """START > FARM > MAP: the whole valley, one tile per 4x4 cells, each showing its ground, shaded where it's
+    for sale; a bracket sprite moves plot by plot and A offers to buy"""
+    open_start(g, 4)
+    g.choose(8, 2, FARM_N, 1)
+    for f in range(60):                 # fast to open: the map is up within a second
+        g.tick(1)
+        if g.pb.memory[0xFE00 + 22 * 4] != 0:
+            break
+    c.check(f < 50, f'map drawn and bracket up after {f} frames')
+    g.tick(40)
+    g.shot('map')
+    hx, hy = g.bld(0)[1] + FO, g.bld(0)[2] + FO
+    skip = {((hx + 1) >> 2, (hy + 1) >> 2), (g.real_pos()[0] >> 2, g.real_pos()[1] >> 2)}   # house + you markers
+    seen, kinds = {}, set()
+    ok = True
+    for ty in range(16):
+        for tx in range(16):
+            if (tx, ty) in skip:
+                continue
+            own = g.plot_owned((ty >> 1) * 8 + (tx >> 1))
+            k = (vm_kind(g, tx * 4, ty * 4, own), own)
+            kinds.add(k[0])
+            t = g.wtile(2 + tx, ty)
+            if seen.setdefault(k, t) != t:
+                ok = False
+    c.check(ok, 'every tile shows its kind (same kind, same tile)')
+    c.eq(len(set(seen.values())), len(seen), f'each kind has its own tile ({len(seen)} kinds shown)')
+    for want in ('woods', 'orchard', 'water', 'marsh', 'rocks', 'cliff', 'path', 'bldg', 'meadow'):
+        c.check(want in kinds, f'{want} on the new valley map')
+    c.check(seen.get(('meadow', True)) != seen.get(('meadow', False)), 'owned meadow is drawn apart from meadow for sale')
+    # the bracket starts on your plot and moves plot by plot
+    px, py = g.real_pos()
+    oam = lambda: (g.pb.memory[0xFE00 + 22 * 4 + 1] - 8, g.pb.memory[0xFE00 + 22 * 4] - 16)
+    def bracket():
+        for _ in range(20):
+            if g.pb.memory[0xFE00 + 22 * 4]:
+                return oam()
+            g.tick(1)
+        return None
+    c.eq(bracket(), (16 + (px >> 3) * 16, (py >> 3) * 16), 'bracket on your plot')
+    g.press('right'); g.tick(2)
+    c.eq(bracket(), (16 + ((px >> 3) + 1) * 16, (py >> 3) * 16), 'one plot right')
+    g.press('down'); g.tick(2)
+    c.eq(bracket(), (16 + ((px >> 3) + 1) * 16, ((py >> 3) + 1) * 16), 'one plot down')
+    g.shot('moved')
+    c.check(g.plot_owned(((py >> 3) + 1) * 8 + (px >> 3) + 1), 'still in the home field: A does nothing')
+    g.press('a'); g.tick(10)
+    c.eq(bracket(), (16 + ((px >> 3) + 1) * 16, ((py >> 3) + 1) * 16), 'map still up')
+    g.press('right'); g.tick(2)
+    # right of the home field: for sale -> A opens the buy prompt
+    p = ((py >> 3) + 1) * 8 + (px >> 3) + 2
+    c.check(not g.plot_owned(p), 'that plot is for sale')
+    g.tick(16)
+    g.shot('for_sale')
+    g.press('a')
+    g.wait_menu(14, YN_Y, 2)
+    g.shot('buy_from_map')
+    g.yesno(False)
+    g.dismiss()
+    c.check(not g.ui_open(), 'map closed')
+    # back in the field: the sprites the map borrowed are the field's again
+    g.tick(20)
+    c.check(g.pb.memory[0xFE00] != 0, 'player sprite back')
 
 
 def boot_title(g):
@@ -1865,7 +2191,7 @@ def s_broke(c, g):
     g.dismiss()
     c.eq((g.bld(0)[3] >> 1) & 3, 0, 'no house upgrade without money')
     g.go_face(24, 14, 'up'); g.act()
-    g.choose(0, 3, 12, 0); g.yesno(True); g.tick(60)
+    g.choose(0, 0, len(realtor_list(g)), 0); g.yesno(True); g.tick(60)
     g.shot('realtor_no_money')
     g.dismiss()
     c.eq(g.u16('plots'), 0x0660, 'no plot without money')
@@ -1939,6 +2265,8 @@ def s_overnight(c, g):
     c.eq(wet, 8, 'sprinkler watered its 8 neighbours')
     c.check(not (g.a1(8, 16) & 0x80) or g.u8('weather') in (1, 3), 'outside the sprinkler stays dry')
     g.sleep(); g.sleep()
+    if g.cell(9, 20) == C_WEEDS:                 # weeds may have sprung up where we stand to reach the hive
+        g.setcell(9, 20, C_GRASS)
     g.go_face(9, 20, 'down'); g.act(); g.tick(6); g.dismiss()
     c.eq(g.inv(I_HONEY), 1, 'beehive honey after 3 days')
     # giant pumpkin: fall, a 2x2 of ripe pumpkins
@@ -2128,7 +2456,7 @@ def s_interior_passout(c, g):
 
 def hall_hire(g, role, expect=True):
     g.go_face(16, 9, 'up'); g.act()
-    g.choose(0, 0, 4, 1)                         # HIRE HELP
+    g.choose(0, 0, HALL_N, 2)                    # HIRE HELP
     g.choose(0, 0, 4, role)
     g.shot(f'hire_{role}')
     if expect:
@@ -2138,7 +2466,7 @@ def hall_hire(g, role, expect=True):
 
 
 def wage(g, role):
-    plots = bin(g.u16('plots')).count('1')
+    plots = g.plots_n()
     w = WAGE_BASE[role] + WAGE_PLOT[role] * plots
     soil = [i for i in range(1024) if g.u8('cell', i) == C_SOIL]
     if role == ROLE_WATER:
@@ -2217,7 +2545,7 @@ def s_farmhands(c, g):
     g.sleep()
     c.eq(gold - g.u32('gold'), 2 * w, 'back pay: two nights of wages')
     open_start(g, 4)
-    g.choose(8, 2, 7, 5)                         # FARM > STAFF
+    g.choose(8, 2, FARM_N, 5)                         # FARM > STAFF
     g.tick(30)
     g.shot('staff_page')
     g.press('a')
@@ -2275,7 +2603,7 @@ def s_businesses(c, g):
     # stock 6 strawberries (basic: tarts), 2 eggs + 2 milk + 2 apples (premium: pies)
     g.w8('inv', 6, I_STRAWB * 3)
     g.act()
-    g.choose(0, 0, 4, 0)                         # Stock
+    g.choose(0, 0, BIZ_MENU_N, 0)                         # Stock
     g.choose(0, 0, 1, 0)
     g.quantity(6)
     g.tick(10)
@@ -2284,14 +2612,14 @@ def s_businesses(c, g):
     c.eq(g.u8('biz_pantry', pan.index(I_STRAWB)), 6, '6 strawberries on the shelf')
     c.eq(g.inv(I_STRAWB), 0, 'taken from the bag')
     g.act()
-    g.choose(0, 0, 4, 1)                         # Status
+    g.choose(0, 0, BIZ_MENU_N, 1)                         # Status
     g.tick(20); g.shot('status'); g.dismiss()
     to_farm(g)
     gold = g.u32('gold')
     g.morning_shot = 'biz_report'
     g.sleep()
-    want = BIZ_CAP[0] * ITEM_PRICE[I_STRAWB] * 10 // 4
-    c.eq(g.u16('biz_today', 0), want, 'six tarts at 2.5x')
+    want = BIZ_CAP[0] * (ITEM_PRICE[I_STRAWB] * BIZ_BQ[0] // 4)
+    c.eq(g.u16('biz_today', 0), want, f'six tarts at {BIZ_BQ[0] / 4}x')
     c.eq(g.u32('gold') - gold, want, 'income paid overnight')
     c.eq(g.u8('biz_sold', 0), 6, 'sold 6')
     c.eq(g.u8('biz_pantry', pan.index(I_STRAWB)), 0, 'pantry used up')
@@ -2299,14 +2627,14 @@ def s_businesses(c, g):
     for it, n in ((I_EGG, 1), (I_MILK, 1), (I_APPLE, 1)):
         g.w8('biz_pantry', n, pan.index(it))
     g.sleep()
-    prem = (ITEM_PRICE[I_EGG] + ITEM_PRICE[I_MILK] + ITEM_PRICE[I_APPLE]) * 14 // 4
-    c.eq(g.u16('biz_today', 0), prem, 'a pie: (egg + milk + apple) x 3.5')
+    prem = (ITEM_PRICE[I_EGG] + ITEM_PRICE[I_MILK] + ITEM_PRICE[I_APPLE]) * BIZ_PQ[0] // 4
+    c.eq(g.u16('biz_today', 0), prem, f'a pie: (egg + milk + apple) x {BIZ_PQ[0] / 4}')
     # upgrade
     g.w16('time', 600)
     to_town(g)
     gold = g.u32('gold')
     g.go_face(*door, 'up'); g.act()
-    g.choose(0, 0, 4, 2)
+    g.choose(0, 0, BIZ_MENU_N, 2)
     g.yesno(True); g.tick(20); g.dismiss()
     c.eq(g.u8('biz_level', 0), 1, 'bakery level 2')
     c.eq(gold - g.u32('gold'), BIZ_UP_PRICE[0], 'upgrade price')
@@ -2328,7 +2656,7 @@ def s_businesses(c, g):
 
 @scenario('rarity_seeds', base='town')
 def s_rarity_seeds(c, g):
-    """rare packets cost 3x and yield 2; legendary is locked until G20000 earned, yields 3-4"""
+    """rare packets cost 3x and yield 2; legendary is locked until LEGEND_EARNED is earned (or year 2), yields 3-4"""
     g.w32('gold', 50000)
     g.go_face(11, 4, 'up'); g.act()
     g.choose(0, 0, STORE_N, 0)
@@ -2344,14 +2672,14 @@ def s_rarity_seeds(c, g):
     g.tick(40); g.shot('legend_locked')
     g.dismiss()
     c.eq(g.seeds(1, R_LEGEND), 0, 'legendary locked for a new farmer')
-    g.w32('earned', 20000)
+    g.w32('earned', LEGEND_EARNED)
     g.go_face(11, 4, 'up'); g.act()
     g.choose(0, 0, STORE_N, 0)
     g.choose(0, 0, 3, R_LEGEND)
     g.choose(0, 0, 4, 0)
     g.quantity(1); g.tick(10)
     g.dismiss()
-    c.eq(g.seeds(1, R_LEGEND), 1, 'legendary radish seed after G20000 earned')
+    c.eq(g.seeds(1, R_LEGEND), 1, f'legendary radish seed after G{LEGEND_EARNED} earned')
     to_farm(g)
     # plant: the selected packet's rarity goes into the soil
     for x, rar in ((9, R_RARE), (10, R_LEGEND)):
@@ -2371,6 +2699,7 @@ def s_rarity_seeds(c, g):
         g.w8('a1', g.a1(x, 14) | SOIL_WET, 14 * 32 + x)
     g.sleep()
     c.eq([g.a2(x, 14) & SOIL_DAYS for x in (9, 10)], [CROP_DAYS[1]] * 2, 'grew to ripe (days in the low bits)')
+    clear_area(g, 9, 13, 11, 13)                  # overnight may have grown a bush on the path
     g.go(10, 13)
     g.shot('ripe_rare_legend')
     g.go_face(9, 13, 'down'); g.w8('tool', T_HAND); g.act(); g.tick(10); g.dismiss()
@@ -2515,19 +2844,439 @@ def s_breeding(c, g):
     c.check(g.anim(k)['flags'] & AF_READY, 'grown up: milk')
 
 
-def v3_bytes(g):
-    """the current GameState rewritten in the v3 layout (39 items, seeds without rarity), with its checksum"""
-    raw = bytes(g.pb.memory[g.G + i] for i in range(GSIZE))
-    inv = OFF['inv']
-    seeds = OFF['seeds']
-    old = bytearray(raw[:inv + 39 * 3])
-    old += bytes(raw[seeds + k * NUM_RARITY] for k in range(NUM_CROPS + 1))
-    old += raw[OFF['saplings']:OFF['furn_init']]
-    old[0], old[1], old[2] = SAVE_MAGIC & 0xFF, SAVE_MAGIC >> 8, 3
+# ------------------------------------------------------------------ animals & stable: barn/coop interiors, the horse
+def fix_up(g, t):
+    """repair a building of type t (test shortcut) and return its slot"""
+    k = g.bld_find(t)
+    g.w8('bld', g.bld(k)[3] & ~1, k * BLD_SIZE + 3)
+    return k
+
+
+def door_cell(g, k):
+    """the farm cell of a building's door (bottom-middle; coop bottom-left)"""
+    t, x, y, _ = g.bld(k)
+    return (x if t == B_COOP else x + BW[t] // 2), y + BH[t] - 1
+
+
+def walk_in(g, k, want):
+    """stand below a building's door and walk into it"""
+    dx, dy = door_cell(g, k)
+    g.go_face(dx, dy + 1, 'up')
+    g.hold('up', 12)
+    g.wait_scene((want,))
+
+
+def walk_out(g):
+    wx, wy = map_warps(g.u8('scene'))[0][:2]
+    g.go_face(wx, wy - 1, 'down')
+    g.press('down', 4, 10)
+    g.wait_scene((SCENE_FARM,))
+
+
+def riding(g):
+    return g.sym8('_riding')
+
+
+@scenario('barn_inside', base='cleared')
+def s_barn_inside(c, g):
+    barn = fix_up(g, B_BARN)
+    g.set_anim(0, A_COW, barn, happy=230, flags=AF_READY, name='Daisy')
+    g.set_anim(1, A_SHEEP, barn, happy=150, flags=AF_READY | (R_RARE << 6), name='Wooly')
+    g.set_anim(2, A_COW, barn, happy=90, age=3, flags=R_LEGEND << 6, name='Baby')
+    g.w16('hay', 10)
+    g.w8('weather', 1)                         # rain: everyone's inside
+    to_town(g); to_farm(g)
+    walk_in(g, barn, MAP_BARN)
+    c.eq(g.u8('scene'), MAP_BARN, 'walked into the barn door')
+    c.eq(g.u8('bld_in'), barn, 'remembers which barn')
+    stalls = sorted((a[2], a[3]) for a in g.actors() if a[0] == K_ANIMAL)
+    c.eq(stalls, [(1, 3), (2, 3), (3, 3)], 'three animals in the first three stalls')
+    g.shot('barn_rain')
+    # milk the cow in stall 1
+    g.go_face(1, 4, 'up'); g.act(); g.tick(30)
+    g.shot('cow_panel')
+    c.check(g.ui_open(), 'animal panel open')
+    g.dismiss()
+    c.eq(g.inv(I_MILK, 2), 1, 'milked the cow (gold-star: happy)')
+    c.check(g.anim(0)['flags'] & AF_PET, 'petted')
+    # shear the rare sheep
+    g.go_face(2, 4, 'up'); g.act(); g.tick(30); g.dismiss()
+    c.eq(g.inv(I_WOOL), 2, 'sheared two wool from a rare sheep')
+    g.go_face(3, 4, 'up'); g.act(); g.tick(30)
+    g.shot('calf_panel')
+    g.dismiss()
+    c.eq(g.inv(I_MILK), 1, 'a calf gives no milk')
+    # fill the mangers from the hay stack
+    g.go_face(8, 4, 'up'); g.act(); g.tick(20); g.dismiss()
+    c.eq(g.u16('hay'), 7, 'three hay into the mangers')
+    c.check(all(g.anim(k)['flags'] & AF_FED for k in range(3)), 'everyone fed')
+    g.go(4, 5)
+    g.shot('mangers_full')
+    g.go_face(8, 4, 'up'); g.act(); g.tick(20); g.dismiss()
+    c.eq(g.u16('hay'), 7, 'no hay used twice')
+    walk_out(g)
+    dx, dy = door_cell(g, barn)
+    c.eq(g.pos(), (dx, dy + 1), 'back outside the barn door')
+    # every building style has its own walls and floor; at noon in the sun the animals are out
+    g.w8('weather', 0); g.w16('time', 720)
+    for st in range(4):
+        g.w8('style', st)
+        walk_in(g, barn, MAP_BARN)
+        if st == 0:
+            c.eq([a for a in g.actors() if a[0] == K_ANIMAL], [], 'sunny noon: the barn is empty, everyone is out')
+        g.go(5, 5)
+        g.shot(f'style_{st}')
+        walk_out(g)
+    g.w8('style', 0)
+    # A at the door still does the quick chores from outside
+    g.w8('anim', 0, ANIM_OFF['flags'])
+    g.go_face(dx, dy + 1, 'up'); g.act(); g.tick(20); g.dismiss()
+    c.check(g.anim(0)['flags'] & AF_FED, 'door chores still feed')
+
+
+@scenario('coop_inside', base='cleared')
+def s_coop_inside(c, g):
+    coop = fix_up(g, B_COOP)
+    g.set_anim(0, A_HEN, coop, happy=100, flags=AF_READY, name='Penny')
+    g.set_anim(1, A_HEN, coop, happy=210, flags=R_LEGEND << 6, name='Sunny')
+    g.w16('hay', 5)
+    g.w16('time', 1140)                        # evening: the hens are in
+    to_town(g); to_farm(g)
+    walk_in(g, coop, MAP_COOP)
+    c.eq(g.u8('scene'), MAP_COOP, 'walked into the coop')
+    hens = [a for a in g.actors() if a[0] == K_ANIMAL]
+    c.eq(len(hens), 2, 'both hens inside in the evening')
+    g.shot('coop_evening')
+    # Penny's nest (box 1) has an egg: collect it from the box
+    g.go_face(1, 3, 'up'); g.act(); g.tick(20)
+    g.shot('egg_collected')
+    g.dismiss()
+    c.eq(g.inv(I_EGG, 0), 1, 'collected an egg from the nest box')
+    c.check(not g.anim(0)['flags'] & AF_READY, 'nest empty now')
+    # fill the trough (cells 6..7, row 5)
+    g.go_face(6, 4, 'down'); g.act(); g.tick(20); g.dismiss()
+    c.eq(g.u16('hay'), 3, 'two hay into the trough')
+    c.check(all(g.anim(k)['flags'] & AF_FED for k in range(2)), 'both hens fed')
+    g.go(3, 6)
+    g.shot('trough_full')
+    # a hen's panel
+    for _ in range(10):
+        h = [a for a in g.actors() if a[0] == K_ANIMAL and a[1] == 1]
+        if not h:
+            break
+        _, _, hx, hy = h[0]
+        for d, (ddx, ddy, _) in DIRS.items():
+            if g.walkable(hx - ddx, hy - ddy):
+                g.go(hx - ddx, hy - ddy); g.face(d)
+                break
+        if g.actor_at(hx, hy):
+            g.act(); g.tick(30)
+            break
+    g.shot('hen_panel')
+    c.check(g.ui_open(), 'hen panel open')
+    g.dismiss()
+    c.check(g.anim(1)['flags'] & AF_PET, 'petted Sunny')
+    walk_out(g)
+    dx, dy = door_cell(g, coop)
+    c.eq(g.pos(), (dx, dy + 1), 'back out at the coop door')
+    # a save made inside the coop loads back inside
+    walk_in(g, coop, MAP_COOP)
+    c.eq(g.u8('bld_in'), coop, 'bld_in set for the save')
+
+
+@scenario('horse', base='cleared')
+def s_horse(c, g):
+    g.rich()
+    g.w16('time', 600)
+    build_poke(g, 4, 5)                        # BUILDINGS > Stable
+    g.go_face(20, 12, 'down'); g.act()
+    g.yesno(True); g.tick(20); g.dismiss()
+    g.press('b'); g.tick(4)
+    st = g.bld_find(B_STABLE)
+    c.require(st is not None, 'stable built')
+    g.go_face(20, 12, 'down'); g.act(); g.tick(10)
+    g.shot('stable_empty'); g.dismiss()
+    to_town(g)
+    g.go_face(11, 4, 'up'); g.act()
+    g.wait_menu(0, 0, STORE_N + 1)
+    g.shot('store_horse')
+    gold = g.u32('gold')
+    g.choose(0, 0, STORE_N + 1, 6)             # Horse
+    g.choose(0, 0, 3, 1)                       # Chestnut
+    for _ in range(60):
+        if g.name_entry_open():
+            break
+        g.tick(5)
+    g.shot('name_horse')
+    g.press('start'); g.tick(20)
+    g.wait_menu(0, 0, STORE_N, advance='a')
+    g.dismiss()
+    c.eq(g.u8('horse'), 2, 'bought a chestnut horse')
+    c.eq(g.u32('gold'), gold - 9000, 'paid G9000')
+    name = bytes(g.u8('horse_name', i) for i in range(6)).split(b'\0')[0]
+    c.eq(name, b'Rusty', 'default name kept')
+    to_farm(g)
+    hs = [a for a in g.actors() if a[0] == K_HORSE]
+    c.require(len(hs) == 1, 'the horse waits by the stable')
+    _, _, hx, hy = hs[0]
+    _, sx, sy, _ = g.bld(st)
+    c.check(abs(hx - (sx + 1)) <= 3 and abs(hy - (sy + 2)) <= 3, f'horse near the stable ({hx},{hy})')
+    # brush, then ride
+    def face_horse():
+        for _ in range(12):                    # it wanders a little: chase it
+            _, _, hx, hy = [a for a in g.actors() if a[0] == K_HORSE][0]
+            for d, (ddx, ddy, _) in DIRS.items():
+                if g.walkable(hx - ddx, hy - ddy):
+                    g.go(hx - ddx, hy - ddy); g.face(d)
+                    break
+            h = g.actor_at(*{'up': (g.pos()[0], g.pos()[1] - 1), 'down': (g.pos()[0], g.pos()[1] + 1),
+                             'left': (g.pos()[0] - 1, g.pos()[1]), 'right': (g.pos()[0] + 1, g.pos()[1])}[DIRNAME[g.u8('facing')]])
+            if h and h[0] == K_HORSE:
+                return h[2], h[3]
+            g.tick(20)
+        raise Fail('cannot reach the horse')
+    love = g.u8('horse_love')
+    face_horse(); g.act()
+    g.choose(12, 3, 4, 1); g.tick(10)
+    c.check(g.u8('horse_day') & 1, 'brushed today')
+    c.eq(g.u8('horse_love'), love + 8, 'brushing: +8 friendship')
+    g.dismiss()
+    hx, hy = face_horse(); g.act()
+    g.shot('horse_menu')
+    g.choose(12, 3, 4, 0); g.tick(10)
+    g.shot('giddy_up')
+    g.dismiss()
+    c.eq(riding(g), 1, 'in the saddle')
+    c.eq(g.pos(), (hx, hy), 'mounted onto the horse')
+    c.check(g.u8('horse_day') & 2, 'ridden today')
+    # speed: hold a direction 32 frames riding vs walking (open ground south of the stable: rows 15-17)
+    g.symw8('_riding', 0)
+    g.go(17, 16)
+    g.symw8('_riding', 1)
+    g.face('right')
+    g.shot('ride_right')
+    x0 = g.pos()[0]
+    g.hold('right', 16); g.tick(10)
+    ride = g.pos()[0] - x0
+    g.shot('ride_moved')
+    g.face('down'); g.tick(4); g.shot('ride_down')
+    g.face('up'); g.tick(4); g.shot('ride_up')
+    g.face('left'); g.tick(4)
+    g.go(17, 16)
+    g.press('b'); g.tick(10)
+    c.eq(riding(g), 0, 'B climbs down')
+    c.check(any(a[0] == K_HORSE and abs(a[2] - 17) + abs(a[3] - 16) <= 1 for a in g.actors()),
+            'horse left where you got off')     # (it may already have taken a step)
+    g.go(17, 17); g.face('right')
+    x0 = g.pos()[0]
+    g.hold('right', 16); g.tick(10)
+    walk = g.pos()[0] - x0
+    c.note(f'16 frames: riding {ride} cells, walking {walk} cells')
+    c.check(ride >= 2 * walk and ride >= 4, f'riding is twice walking speed ({ride} vs {walk})')
+    # A dismounts too
+    hx, hy = face_horse(); g.act(); g.choose(12, 3, 4, 0); g.tick(10); g.dismiss()
+    c.eq(riding(g), 1, 'mounted again')
+    g.act(); g.tick(10)
+    c.eq(riding(g), 0, 'A climbs down')
+    # friends + farm pages
+    open_start(g, 4); g.choose(8, 2, FARM_N, 3); g.tick(20)
+    g.shot('friends_page'); g.dismiss()
+    open_start(g, 4); g.choose(8, 2, FARM_N, 0); g.tick(20)
+    g.shot('farm_page'); g.dismiss()
+    # off to town: the horse waits at the stable when you come back
+    hx, hy = face_horse(); g.act(); g.choose(12, 3, 4, 0); g.tick(10); g.dismiss()
+    to_town(g)
+    c.eq(riding(g), 0, 'leaving the farm dismounts')
+    to_farm(g)
+    _, _, hx, hy = [a for a in g.actors() if a[0] == K_HORSE][0]
+    c.check(abs(hx - (sx + 1)) <= 3 and abs(hy - (sy + 2)) <= 3, 'back by the stable')
+    # friendship grows day by day
+    g.w8('horse_day', 3)
+    g.sleep()
+    c.eq(g.u8('horse_day'), 0, 'a new day: brush and ride again')
+
+
+def legacy_bytes(g, version):
+    """the current game as a v3/v4 save: magic, version, the home valley as the old 32x32 world (cell, a1,
+    a2), the old 16-bit plot mask, then GameState from bld on (v4: up to seed_rar; v3: 39 items, seeds
+    without rarity, up to rng_hi), with farm coordinates back in the old frame, and the checksum"""
+    raw = bytearray(g.pb.memory[g.G + i] for i in range(GSIZE))
+    for k in range(MAX_BLD):
+        b = OFF['bld'] + k * BLD_SIZE
+        if raw[b] != 0xFF:
+            raw[b + 1] -= FO; raw[b + 2] -= FO
+    if raw[OFF['scene']] == SCENE_FARM:
+        raw[OFF['px']] -= FO; raw[OFF['py']] -= FO
+    world = bytes(g.cell(i % 32, i // 32) for i in range(1024)) + bytes(g.a1(i % 32, i // 32) for i in range(1024)) + \
+        bytes(g.a2(i % 32, i // 32) for i in range(1024))
+    plots = g.u16('plots')
+    old = bytearray([SAVE_MAGIC & 0xFF, SAVE_MAGIC >> 8, version]) + world + bytes([plots & 0xFF, plots >> 8])
+    bld = OFF['bld']
+    inv, ship = OFF['inv'], OFF['shipped']         # old saves: 40 items (v3: 39) and a 6-byte collection log
+    if version == 4:
+        old += raw[bld:inv + 40 * 3] + raw[OFF['seeds']:ship + 6] + raw[OFF['goals']:OFF['seed_rar'] + 1]
+    else:
+        old += raw[bld:inv + 39 * 3]
+        old += bytes(raw[OFF['seeds'] + k * NUM_RARITY] for k in range(NUM_CROPS + 1))
+        old += raw[OFF['saplings']:ship + 6] + raw[OFF['goals']:OFF['furn_init']]
     s = 0x1234
     for b in old:
         s = (((s << 1) | (s >> 15)) + b) & 0xFFFF
     return bytes(old) + bytes([s & 0xFF, s >> 8])
+
+
+def v3_bytes(g):
+    return legacy_bytes(g, 3)
+
+
+def put_save(g, data, slot=0, other_empty=True):
+    """write a raw save image into a slot header (SRAM bank 0) of the battery file, then boot"""
+    g.stop()
+    ram = g.rom + '.ram'
+    sav = bytearray(open(ram, 'rb').read()) if os.path.exists(ram) else bytearray(RAM_SIZE)
+    sav += bytes(RAM_SIZE - len(sav))
+    sav[slot * 0x1000:slot * 0x1000 + len(data)] = data
+    if other_empty:
+        sav[(1 - slot) * 0x1000:(1 - slot) * 0x1000 + 2] = b'\0\0'
+    open(ram, 'wb').write(bytes(sav))
+    g.boot()
+
+
+@scenario('save_v4_migrate')
+def s_save_v4(c, g):
+    """a v4 save (32x32 world inside GameState) carried into the 64x64 valley: the old farm is the middle"""
+    g.w32('gold', 4242)
+    g.w16('stone', 55)
+    g.w8('friend', 77, NPC_ROSA)
+    g.w8('inv', 9, I_WOOL * 3)
+    g.setcell(10, 14, C_SOIL, 3 | SOIL_WET, (R_RARE << 6) | 2)       # a watered rare strawberry, 2 days in
+    g.setcell(11, 14, C_DECOR, DK_SCARECROW, 0)
+    g.setcell(9, 25, C_TREE, 2 << 5, 40)                              # in old plot 13 (bought below)
+    g.setcell(2, 2, C_DECOR, DK_STATUE, 0)                            # in old plot 0 (not owned: dropped)
+    old_plots = 0x0660 | (1 << 13)
+    data = bytearray(legacy_bytes(g, 4))
+    data[3 + 3072] = old_plots & 0xFF; data[3 + 3073] = old_plots >> 8
+    s = 0x1234
+    for b in data[:-2]:
+        s = (((s << 1) | (s >> 15)) + b) & 0xFFFF
+    data[-2], data[-1] = s & 0xFF, s >> 8
+    house = g.bld(g.bld_find(B_HOUSE))
+    pos = g.pos()
+    put_save(g, bytes(data))
+    title_start(g)
+    g.choose(1, 9, 3, 0)
+    g.shot('slot_menu')
+    g.choose(8, 4, 3, 0)
+    g.tick(60); g.dismiss(); g.wait_field()
+    g.shot('migrated')
+    c.eq(g.u8('version'), SAVE_VERSION, 'upgraded to the current version')
+    c.eq(g.u32('gold'), 4242, 'gold')
+    c.eq(g.u16('stone'), 55, 'stone')
+    c.eq(g.u8('friend', NPC_ROSA), 77, 'friendship')
+    c.eq(g.inv(I_WOOL), 9, 'wool (the last item)')
+    c.eq(g.u16('plots'), old_plots, 'old plots map onto the middle of the 8x8 grid')
+    c.eq(g.plots_n(), 5, 'five plots owned in all')
+    c.check(g.plot_owned(OLD_PLOT(13)) and g.plot_owned(OLD_PLOT(5)), 'South Pasture and the home field owned')
+    c.eq((g.cell(10, 14), g.a1(10, 14), g.a2(10, 14)), (C_SOIL, 3 | SOIL_WET, (R_RARE << 6) | 2), 'the crop moved with its farm')
+    c.eq((g.cell(11, 14), g.a1(11, 14)), (C_DECOR, DK_SCARECROW), 'scarecrow')
+    c.eq((g.cell(9, 25), g.a1(9, 25), g.a2(9, 25)), (C_TREE, 2 << 5, 40), 'fruit tree on the bought plot')
+    c.check(g.cell(2, 2) != C_DECOR, 'an unowned old plot is the new valley, not the old cells')
+    c.eq(g.bld(g.bld_find(B_HOUSE)), house, 'house where it was (in the home-valley frame)')
+    c.eq(g.wcell(*[v + FO for v in (house[1], house[2])]), C_STRUCT, 'house cells at the shifted spot')
+    c.eq(g.pos(), pos, 'player where they saved')
+    c.eq(g.wcell(46, 0), C_WATER, 'the river runs out of the top of the valley')
+    g.go(10, 13)
+    g.shot('walked')
+    # the next save is a v5 one, and it loads back with the farm intact
+    open_start(g, 6)
+    g.yesno(True); g.tick(20); g.dismiss()
+    w = g.world()
+    boot_title(g)
+    g.choose(1, 9, 3, 0)
+    g.choose(8, 4, 3, 0)
+    g.tick(60); g.dismiss(); g.wait_field()
+    c.eq(g.world(), w, 'the migrated world saved and loaded back byte for byte')
+    c.eq(g.u32('gold'), 4242, 'gold after the round trip')
+
+
+@scenario('world_save_roundtrip')
+def s_world_roundtrip(c, g):
+    """the 12KB world saves into its slot and loads back exactly; the other slot keeps its own world"""
+    g.wset(1, 1, C_SOIL, 5 | SOIL_FERT, 7)               # far corners, outer valley
+    g.wset(62, 62, C_DECOR, DK_LAMP, 1)
+    g.wset(0, 63, C_TREE, 3 << 5, 99)
+    g.setcell(12, 15, C_SOIL, 1, 3)
+    w = g.world()
+    sums = (sum(w[:4096]), sum(w[4096:8192]), sum(w[8192:]))
+    open_start(g, 6)
+    g.yesno(True); g.tick(20); g.dismiss()
+    # scribble on the live world, then load the slot: the save must win
+    for x in range(64):
+        g.wset(x, 5, C_WATER, 0, 0)
+    boot_title(g)
+    g.choose(1, 9, 3, 0)
+    g.choose(8, 4, 3, 0)
+    g.tick(60); g.dismiss(); g.wait_field()
+    w2 = g.world()
+    c.eq((sum(w2[:4096]), sum(w2[4096:8192]), sum(w2[8192:])), sums, 'world sums')
+    c.check(w2 == w, 'world byte for byte')
+    c.eq((g.wcell(1, 1), g.wa1(1, 1), g.wa2(1, 1)), (C_SOIL, 5 | SOIL_FERT, 7), 'corner cell (a2 from the other bank)')
+    c.eq((g.wcell(62, 62), g.wa1(62, 62), g.wa2(62, 62)), (C_DECOR, DK_LAMP, 1), 'far corner')
+    # a new farm in slot 2 has its own world; slot 1 is untouched
+    boot_title(g)
+    g.choose(1, 9, 3, 1)
+    g.tick(60)
+    g.yesno(False, advance='a')
+    g.tick(20); g.dismiss(); g.wait_field()
+    c.check(g.wcell(1, 1) != C_SOIL or g.wa2(1, 1) != 7, 'slot 2 starts a fresh valley')
+    g.sleep()
+    boot_title(g)
+    g.choose(1, 9, 3, 0)
+    g.choose(8, 4, 3, 0)
+    g.tick(60); g.dismiss(); g.wait_field()
+    c.check(g.world() == w, 'slot 1 world untouched by slot 2')
+    # a corrupted world fails its checksum: the slot reads as empty instead of loading garbage
+    g.stop()
+    ram = g.rom + '.ram'
+    sav = bytearray(open(ram, 'rb').read())
+    sav[3 * 0x2000 + 100] ^= 0xFF                         # slot 0 world (SRAM bank 3)
+    open(ram, 'wb').write(bytes(sav))
+    g.boot()
+    title_start(g)
+    g.wait_menu(1, 9, 3)
+    g.shot('corrupt_slot')
+    g.choose(1, 9, 3, 0)
+    g.tick(60)
+    c.check(not (g.ui_open() and g.menu_sel(8, 4, 3) is not None), 'a corrupted slot offers no Continue')
+
+
+@scenario('far_corners', base='cleared')
+def s_far_corners(c, g):
+    """own the whole valley and walk the 64x64 world to all four corners: camera, streaming, minimap"""
+    for k in range(8):
+        g.w8('plots', 0xFF, k)
+    # a walkable lattice through the woods, lake and quarries (every 4th row and column; the river stays)
+    for y in range(WH):
+        for x in range(WW):
+            if (x % 4 == 0 or y % 4 == 0 or y in (10, 54)) and g.wcell(x, y) not in (C_WATER, C_STRUCT, C_ROAD) and \
+                    not (g.wcell(x, y) == C_DECOR and g.wa1(x, y) == DK_BRIDGE):
+                g.wset(x, y, C_GRASS)
+    for (x, y) in ((0, 0), (WW - 1, 0), (0, WH - 1), (WW - 1, WH - 1)):
+        g.wset(x, y, C_GRASS)
+    to_town(g); to_farm(g)
+    for name, (x, y) in (('nw', (0, 0)), ('ne', (WW - 1, 0)), ('se', (WW - 1, WH - 1)), ('sw', (0, WH - 1))):
+        g.go(x - FO, y - FO)
+        g.tick(10)
+        c.eq(g.real_pos(), (x, y), f'reached the {name} corner')
+        scx, scy = g.sym8('_scx') | (g.sym8('_scx', 1) << 8), g.sym8('_scy') | (g.sym8('_scy', 1) << 8)
+        c.eq(scx, 0 if x == 0 else WW * 16 - 160, f'{name}: camera x clamped to the world edge')
+        c.eq(scy, 0 if y == 0 else WH * 16 - 136, f'{name}: camera y clamped to the world edge')
+        g.shot(name)
+    open_start(g, 4)
+    g.choose(8, 2, FARM_N, 1)                                   # MAP
+    g.tick(60)
+    g.shot('map_all_owned')
+    g.dismiss()
 
 
 @scenario('save_v3_migrate')
@@ -2541,7 +3290,7 @@ def s_save_v3(c, g):
     data = v3_bytes(g)
     g.stop()
     ram = g.rom + '.ram'
-    sav = bytearray(open(ram, 'rb').read()) if os.path.exists(ram) else bytearray(0x8000)
+    sav = bytearray(open(ram, 'rb').read()) if os.path.exists(ram) else bytearray(RAM_SIZE)
     sav[0:len(data)] = data
     sav[0x1000:0x1002] = b'\0\0'                 # slot 2 empty
     open(ram, 'wb').write(bytes(sav))
@@ -2562,6 +3311,1877 @@ def s_save_v3(c, g):
     c.eq(g.u8('version'), SAVE_VERSION, 'upgraded to the current version')
     g.enter_house()
     c.eq(len(g.furn()), 3, "Grandpa's furniture appears on the first visit")
+
+
+# ------------------------------------------------------------------ design tools (designer.c)
+DECOR_WOOD = [int(d[4]) for d in DECOR]
+DECOR_STONE = [int(d[5]) for d in DECOR]
+SWATCH = [[int(h, 16) for h in re.findall(r'C5\(0x([0-9A-Fa-f]+)\)', row)]
+          for row in re.findall(r'\{([^{}]*)\}', _table(_src('designer.c'), 'swatch'))]
+ACC_SLOT = [CONST['PAL_RED'] * 4 + 2, CONST['PAL_WOOD'] * 4 + 1, CONST['PAL_STONE'] * 4 + 1]
+
+
+def c5(rgb):
+    return ((rgb >> 19) & 31) | (((rgb >> 11) & 31) << 5) | (((rgb >> 3) & 31) << 10)
+
+
+def bg_pal(g, entry):
+    """a colour from CGB background palette RAM (BCPS/BCPD), entry = palette * 4 + colour"""
+    m = g.pb.memory
+    keep = m[0xFF68]
+    m[0xFF68] = entry * 2
+    lo = m[0xFF69]
+    m[0xFF68] = entry * 2 + 1
+    hi = m[0xFF69]
+    m[0xFF68] = keep
+    return lo | (hi << 8)
+
+
+def money(g):
+    return g.u32('gold'), g.u16('wood'), g.u16('stone')
+
+
+def paint_walk(g, d, steps, shot_at=None, shot=None):
+    """face d, hold A, walk `steps` cells with A held, let go; optional screenshot mid-stroke"""
+    g.park_pet()                        # (a shooed pet stands on your cell: the stroke would skip it)
+    g.face(d)
+    g.pb.button_press('a')
+    g.tick(6)
+    g.pb.button_press(d)
+    x, y = g.pos()
+    done = 0
+    for _ in range(steps * 40):
+        g.tick(1)
+        if g.pos() != (x, y):
+            x, y = g.pos()
+            done += 1
+            if done == shot_at:
+                g.tick(2)
+                g.shot(shot)
+            if done >= steps:
+                break
+    g.pb.button_release(d)
+    g.tick(10)
+    g.pb.button_release('a')
+    g.tick(8)
+    return done
+
+
+def quick_undo(g):
+    """START while building -> the BUILD quick menu -> UNDO"""
+    g.press('start')
+    g.choose(8, 0, 6, 0)
+    g.tick(10)
+
+
+@scenario('paint', base='cleared')
+def s_paint(c, g):
+    g.rich()
+    # a brick path: hold A and walk right; the line starts where you stood
+    build_poke(g, 2, 1)
+    g.go_face(9, 16, 'right')
+    before = money(g)
+    paint_walk(g, 'right', 4, shot_at=3, shot='painting')
+    bricks = [x for x in range(8, 15) if g.cell(x, 16) == C_DECOR and g.a1(x, 16) == DK_BRICK]
+    c.eq(bricks, [9, 10, 11, 12], 'brick line laid along the walk')
+    c.eq(before[0] - g.u32('gold'), 4 * DECOR_GOLD[DK_BRICK], 'gold charged per cell')
+    c.eq(before[2] - g.u16('stone'), 4 * DECOR_STONE[DK_BRICK], 'stone charged per cell')
+    c.eq(g.sym8('_paint_on'), 0, 'stroke closes when A is let go')
+    g.shot('brick_line')
+    # a fence row: fences block walking, but each lands behind you
+    build_poke(g, 2, 4)
+    g.go_face(9, 22, 'right')
+    before = money(g)
+    paint_walk(g, 'right', 5)
+    fences = [x for x in range(8, 15) if g.cell(x, 22) == C_DECOR and g.a1(x, 22) == DK_FENCE]
+    c.eq(fences, [9, 10, 11, 12, 13], 'fence row laid behind the player')
+    c.eq([g.a2(x, 22) for x in (10, 11, 12)], [1, 1, 1], 'fence rails autotile horizontally')
+    c.eq(before[1] - g.u16('wood'), 5 * DECOR_WOOD[DK_FENCE], 'wood charged per fence')
+    g.shot('fence_row')
+    # a tap still places in front, as before
+    build_poke(g, 1, 4)                 # hedge
+    g.go_face(11, 19, 'up')
+    g.act(); g.tick(6)
+    c.eq((g.cell(11, 18), g.a1(11, 18)), (C_DECOR, DK_HEDGE), 'tap places in front')
+    # running out of gold stops the stroke cleanly
+    build_poke(g, 1, 0)                 # flower bed
+    g.go_face(17, 13, 'right')
+    g.w32('gold', DECOR_GOLD[DK_FLOWERBED] * 2 + 5)
+    paint_walk(g, 'right', 5, shot_at=4, shot='out_of_gold')
+    beds = [x for x in range(17, 24) if g.cell(x, 13) == C_DECOR and g.a1(x, 13) == DK_FLOWERBED]
+    c.eq(beds, [17, 18], 'only what the gold could pay for')
+    c.eq(g.u32('gold'), 5, 'never goes below zero')
+    # a blocked cell on the way is skipped, the rest of the line still goes down
+    g.rich()
+    build_poke(g, 2, 2)                 # gravel
+    g.setcell(19, 15, C_DECOR, DK_PATH)
+    g.go_face(17, 15, 'right')
+    before = money(g)
+    paint_walk(g, 'right', 4)
+    row = [(g.a1(x, 15) if g.cell(x, 15) == C_DECOR else None) for x in range(17, 21)]
+    c.eq(row, [DK_GRAVEL, DK_GRAVEL, DK_PATH, DK_GRAVEL], 'gravel line goes round the existing path cell')
+    c.eq(before[0] - g.u32('gold'), 3 * DECOR_GOLD[DK_GRAVEL], 'skipped cell not charged')
+    # the eraser: SELECT swaps to it; hold A and walk into the fence row to clear it
+    build_poke(g, 2, 2)
+    g.go_face(8, 22, 'right')
+    g.press('select'); g.tick(4)
+    c.eq((g.u8('build_cat'), g.u8('build_sel')), (5, 1), 'SELECT picks the eraser')
+    c.eq(g.sym8('_building'), 1, 'still building')
+    paint_walk(g, 'right', 3, shot_at=2, shot='erasing')
+    gone = [x for x in range(9, 14) if g.cell(x, 22) == C_GRASS]
+    c.check(len(gone) >= 3 and gone[0] == 9, f'eraser cleared the fence row as it walked (cleared {gone})')
+    g.press('select'); g.tick(4)
+    c.eq((g.u8('build_cat'), g.u8('build_sel')), (2, 2), 'SELECT again goes back to the item in hand')
+    g.press('b'); g.tick(4)
+    c.eq(g.sym8('_building'), 0, 'B still leaves build mode')
+
+
+@scenario('undo', base='cleared')
+def s_undo(c, g):
+    g.rich()
+    start = money(g)
+    # 1. a statue (gold + stone)
+    build_poke(g, 1, 5)
+    g.go_face(9, 16, 'down'); g.act(); g.tick(6)
+    c.eq(g.a1(9, 17), DK_STATUE, 'statue placed')
+    after_statue = money(g)
+    # 2. a brick stroke over tilled soil (the soil comes back on undo)
+    for x in range(10, 14):
+        g.setcell(x, 19, C_SOIL, SOIL_WET)
+    build_poke(g, 2, 1)
+    g.go_face(10, 19, 'right')
+    paint_walk(g, 'right', 4)
+    c.eq([g.a1(x, 19) for x in range(10, 14)], [DK_BRICK] * 4, 'brick stroke over soil')
+    after_stroke = money(g)
+    # 3. erase the statue
+    build_poke(g, 5, 1)
+    g.go_face(9, 16, 'down'); g.act(); g.tick(6)
+    c.eq(g.cell(9, 17), C_GRASS, 'statue erased')
+    # 4. a picnic table, then move it
+    build_poke(g, 1, 8)
+    g.go_face(12, 16, 'down'); g.act(); g.tick(6)
+    after_picnic = money(g)
+    build_poke(g, 5, 0)
+    g.act(); g.tick(6)
+    g.go_face(13, 16, 'down'); g.act(); g.tick(6)
+    c.eq((g.cell(12, 17), g.a1(13, 17)), (C_GRASS, DK_PICNIC), 'picnic table moved')
+    g.shot('before_undo')
+    # undo, newest first
+    build_poke(g, 1, 0)
+    g.press('start')
+    g.wait_menu(8, 0, 6)
+    g.shot('quick_menu')
+    g.choose(8, 0, 6, 0)
+    g.tick(10)
+    c.eq((g.cell(13, 17), g.a1(12, 17)), (C_GRASS, DK_PICNIC), 'undo move: table back where it was')
+    c.eq(money(g), after_picnic, 'a move costs and refunds nothing')
+    quick_undo(g)
+    c.eq(g.cell(12, 17), C_GRASS, 'undo place: table gone')
+    c.eq(money(g), after_stroke, 'picnic table refunded exactly')
+    quick_undo(g)
+    c.eq((g.cell(9, 17), g.a1(9, 17)), (C_DECOR, DK_STATUE), 'undo erase: statue back (free)')
+    c.eq(money(g), after_stroke, 'restoring an erased piece is free')
+    g.shot('undo_erase')
+    quick_undo(g)
+    c.eq([(g.cell(x, 19), g.a1(x, 19)) for x in range(10, 14)], [(C_SOIL, SOIL_WET)] * 4, 'undo stroke: the whole line, wet soil back')
+    c.eq(money(g), after_statue, 'stroke refunded exactly')
+    quick_undo(g)
+    c.eq(g.cell(9, 17), C_GRASS, 'undo statue')
+    c.eq(money(g), start, 'back to the starting gold, wood and stone')
+    quick_undo(g)
+    c.eq(money(g), start, 'nothing left to undo')
+    # a building and its move
+    clear_area(g, 17, 13, 23, 17, force=True)
+    build_poke(g, 4, 3)                 # silo
+    g.go_face(18, 16, 'up'); g.act()
+    g.yesno(True); g.tick(20); g.dismiss()
+    k = g.bld_find(B_SILO)
+    c.require(k is not None, 'silo built')
+    build_poke(g, 5, 0)
+    g.go_face(18, 16, 'up'); g.act(); g.tick(6)
+    g.go_face(21, 16, 'up'); g.act(); g.tick(6)
+    c.eq(g.bld(k)[1:3], (21, 14), 'silo moved')
+    quick_undo(g)
+    c.eq(g.bld(k)[1:3], (18, 14), 'undo building move')
+    c.eq([g.cell(18, 14), g.cell(18, 15), g.cell(21, 14)], [C_STRUCT, C_STRUCT, C_GRASS], 'silo cells restamped')
+    quick_undo(g)
+    c.eq(g.bld(k)[0], 0xFF, 'undo building')
+    c.eq(money(g), start, 'silo refunded exactly')
+    g.shot('after_undos')
+    # the history is cleared by leaving the farm
+    build_poke(g, 1, 0)
+    g.go_face(11, 16, 'down'); g.act(); g.tick(6)
+    c.eq(g.sym8('_undo_n'), 1, 'one action recorded')
+    g.press('b'); g.tick(4)
+    to_town(g); to_farm(g)
+    c.eq(g.sym8('_undo_n'), 0, 'history cleared after a trip to town')
+
+
+@scenario('recolour', base='cleared')
+def s_recolour(c, g):
+    c.eq(bg_pal(g, ACC_SLOT[0]), c5(SWATCH[0][0]), 'roof red is the art colour to begin with')
+    open_start(g, 3)
+    g.choose(0, 0, 8, 7)                # BUILD > COLOURS
+    g.tick(20)
+    g.press('right'); g.press('right')  # roofs: Terracotta
+    g.tick(4)
+    c.eq(g.u16('accent', 0), c5(SWATCH[0][2]), 'roof accent set')
+    c.eq(bg_pal(g, ACC_SLOT[0]), c5(SWATCH[0][2]), 'palette RAM written live')
+    g.press('down'); g.press('left')    # wood: wraps round to the last swatch
+    g.press('down'); g.press('right'); g.press('right'); g.press('right')   # stone: the fourth swatch
+    g.tick(20)
+    g.shot('colour_menu')
+    g.press('a'); g.tick(10)
+    g.dismiss(); g.wait_field()
+    want = [c5(SWATCH[0][2]), c5(SWATCH[1][4]), c5(SWATCH[2][3])]
+    c.eq([g.u16('accent', k * 2) for k in range(3)], want, 'accents kept')
+    c.eq([bg_pal(g, s) for s in ACC_SLOT], want, 'all three in palette RAM')
+    g.go(19, 12)
+    g.shot('recoloured_farm')
+    # B in the menu puts the colours back
+    open_start(g, 3)
+    g.choose(0, 0, 8, 7)
+    g.tick(10)
+    g.press('right'); g.tick(4)
+    c.check(g.u16('accent', 0) != want[0], 'preview changes it')
+    g.press('b'); g.tick(10)
+    g.dismiss(); g.wait_field()
+    c.eq(g.u16('accent', 0), want[0], 'B undoes the preview')
+    c.eq(bg_pal(g, ACC_SLOT[0]), want[0], 'and puts the palette back')
+    # night: the custom colour goes through the same tint ramps as the rest
+    g.w16('time', 1300)
+    g.tick(700)                         # the next clock tick re-applies the palettes
+
+    def tint(rgb):
+        r, gg, b = rgb & 31, (rgb >> 5) & 31, rgb >> 10
+        return (r * 6 // 16) | ((gg * 7 // 16) << 5) | ((b * 10 // 16 + 4) << 10)
+    c.eq(bg_pal(g, ACC_SLOT[0]), tint(want[0]), 'night tint composes with the custom roof colour')
+    g.shot('recoloured_night')
+    # the town keeps its own colours
+    g.w16('time', 600)
+    to_town(g)
+    c.eq(bg_pal(g, ACC_SLOT[0]), c5(SWATCH[0][0]), 'town uses the art colours')
+    to_farm(g)
+    c.eq(bg_pal(g, ACC_SLOT[0]), want[0], 'back on the farm the roofs are recoloured again')
+    # kept in the save
+    open_start(g, 6)
+    g.yesno(True); g.tick(20); g.dismiss()
+    boot_title(g)
+    g.choose(1, 9, 3, 0)
+    g.choose(8, 4, 3, 0)
+    g.tick(60); g.dismiss(); g.wait_field()
+    c.eq([g.u16('accent', k * 2) for k in range(3)], want, 'accents saved and loaded')
+    c.eq(bg_pal(g, ACC_SLOT[1]), want[1], 'and applied after loading')
+
+
+def garden(g):
+    """a little garden at 8..12 x 15..19: picket ring, brick cross path, red flowers and a lamp"""
+    for x in range(8, 13):
+        for y in (15, 19):
+            g.setcell(x, y, C_DECOR, DK_PICKET)
+    for y in range(16, 19):
+        g.setcell(8, y, C_DECOR, DK_PICKET)
+        g.setcell(12, y, C_DECOR, DK_PICKET)
+    for x in range(9, 12):
+        g.setcell(x, 17, C_DECOR, DK_BRICK)
+    g.setcell(10, 16, C_DECOR, DK_FLOWERS_RED)
+    g.setcell(10, 18, C_DECOR, DK_LAMP)
+
+
+@scenario('blueprint', base='cleared')
+def s_blueprint(c, g):
+    g.rich()
+    clear_area(g, 8, 14, 14, 14)
+    garden(g)
+    to_town(g); to_farm(g)
+    build_poke(g, 6, 0)                 # BLUEPRINT > Copy Area
+    g.go_face(8, 14, 'down'); g.act(); g.tick(6)    # first corner (8,15)
+    c.eq(g.sym8('_copy_on'), 1, 'first corner set')
+    g.go_face(13, 19, 'left')           # far corner (12,19)
+    g.tick(20)
+    g.shot('copy_area')
+    g.act()
+    g.wait_menu(0, 0, CONST['BP_SLOTS'])
+    g.shot('save_slot')
+    g.choose(0, 0, CONST['BP_SLOTS'], 0)         # save as Blueprint 1
+    g.tick(20); g.dismiss()
+    c.eq(g.u8('bp_wh', 0), (5 << 4) | 5, 'blueprint 1 is 5x5')
+    pieces = 16 + 3 + 2
+    c.eq((g.u8('build_cat'), g.u8('build_sel')), (6, 1), 'goes straight on to stamping it')
+    # stamp it in the east area, with the ghost showing first
+    clear_area(g, 17, 12, 23, 17, force=True)
+    to_town(g); to_farm(g)
+    g.symw8('_building', 1)
+    g.go_face(20, 12, 'down')           # 5 wide, centred under the front cell: x 18..22, y 13..17
+    g.shoo_pet()
+    g.tick(30)
+    c.eq((g.sym8('_ghost_x') - FO, g.sym8('_ghost_y') - FO, g.sym8('_ghost_w')), (18, 13, 5), 'ghost over the stamp area')
+    g.shot('stamp_ghost')
+    before = money(g)
+    g.park_pet()
+    g.act()
+    g.wait_menu(14, YN_Y, 2)
+    g.shot('stamp_cost')
+    g.yesno(True); g.tick(20); g.dismiss()
+    got = sum(1 for x in range(18, 23) for y in range(13, 18) if g.cell(x, y) == C_DECOR)
+    c.eq(got, pieces, 'every piece stamped')
+    c.eq([g.a1(x, 13) for x in range(18, 23)], [DK_PICKET] * 5, 'fence top row')
+    c.eq((g.a1(20, 14), g.a1(20, 16), g.a1(19, 15)), (DK_FLOWERS_RED, DK_LAMP, DK_BRICK), 'inside pieces')
+    cost = [0, 0, 0]
+    for k, n in ((DK_PICKET, 16), (DK_BRICK, 3), (DK_FLOWERS_RED, 1), (DK_LAMP, 1)):
+        cost[0] += DECOR_GOLD[k] * n
+        cost[1] += DECOR_WOOD[k] * n
+        cost[2] += DECOR_STONE[k] * n
+    c.eq(tuple(b - a for a, b in zip(money(g), before)), tuple(cost), 'stamp charged the sum of its pieces')
+    c.eq([g.a2(x, 13) for x in (19, 20, 21)], [1, 1, 1], 'stamped fences autotile')
+    g.press('b'); g.tick(4)
+    g.go(17, 12)
+    g.shot('stamped')
+    # undo lifts the whole stamp as one action
+    build_poke(g, 6, 1)
+    quick_undo(g)
+    c.eq(sum(1 for x in range(18, 23) for y in range(13, 18) if g.cell(x, y) == C_DECOR), 0, 'undo lifts the whole stamp')
+    c.eq(money(g), before, 'stamp refunded exactly')
+    # partial stamp: a blocked cell and too little gold
+    g.setcell(18, 13, C_ROCK)
+    g.w32('gold', DECOR_GOLD[DK_PICKET] * 3 + 1)
+    g.go_face(20, 12, 'down'); g.tick(20)
+    g.act()
+    g.yesno(True); g.tick(20); g.dismiss()
+    placed = sum(1 for x in range(18, 23) for y in range(13, 18) if g.cell(x, y) == C_DECOR)
+    c.check(0 < placed < pieces, f'partial stamp places only what fits and is paid for ({placed})')
+    c.eq(g.cell(18, 13), C_ROCK, 'blocked cell left alone')
+    c.check(g.u32('gold') < DECOR_GOLD[DK_PICKET], 'spent down to what there was')
+    g.press('b'); g.tick(4)
+    # a building inside the copied area comes along
+    g.rich()
+    clear_area(g, 8, 15, 14, 23, force=True)
+    clear_area(g, 16, 8, 16, 11)
+    to_town(g); to_farm(g)
+    build_poke(g, 6, 0)
+    g.go_face(16, 9, 'right'); g.act(); g.tick(6)    # the coop at 17,9 (2x2): first corner (17,9)
+    g.go_face(19, 11, 'up'); g.act()                 # far corner (19,10)
+    g.choose(0, 0, CONST['BP_SLOTS'], 1)
+    g.tick(20); g.dismiss()
+    c.eq(g.u8('bp_wh', 1), (3 << 4) | 2, 'blueprint 2 is 3x2')
+    ncoop = sum(1 for k in range(MAX_BLD) if g.bld(k)[0] == B_COOP)
+    g.go_face(11, 21, 'up'); g.tick(20)              # 3x2 above the player: x 10..12, y 19..20
+    g.shot('ghost_coop')
+    g.act()
+    g.yesno(True); g.tick(20); g.dismiss()
+    c.eq(sum(1 for k in range(MAX_BLD) if g.bld(k)[0] == B_COOP), ncoop + 1, 'a coop stamped from the blueprint')
+    g.press('b'); g.tick(4)
+    g.go(11, 22)
+    g.shot('coop_stamped')
+
+
+def pet_oam(g):
+    """the pet's sprite pair: (y, x) of its first OAM entry, (0, 0) when hidden"""
+    b = g.sym['_act_kind']
+    for k in range(MAX_ACT):
+        if g.pb.memory[b + k] == K_PET:
+            o = 0xFE00 + (6 + k * 2) * 4
+            return g.pb.memory[o], g.pb.memory[o + 1]
+    return None
+
+
+def put_pet(g, x, y):
+    """test-only: stand the pet on a real cell"""
+    b, n = g.sym['_act_kind'], MAX_ACT
+    for k in range(n):
+        if g.pb.memory[b + k] == K_PET:
+            g.pb.memory[b + 2 * n + k], g.pb.memory[b + 3 * n + k] = x, y
+
+
+@scenario('ghost_pet', base='cleared')
+def s_ghost_pet(c, g):
+    """the pet never blocks building: a blueprint ghost draws its piece under the pet (the pet stays drawn on
+    top), the stamp puts every piece down and the pet hops off onto open ground"""
+    g.rich()
+    clear_area(g, 8, 14, 14, 14)
+    garden(g)
+    to_town(g); to_farm(g)
+    build_poke(g, 6, 0)
+    g.go_face(8, 14, 'down'); g.act(); g.tick(6)
+    g.go_face(13, 19, 'left'); g.tick(4); g.act()
+    g.choose(0, 0, CONST['BP_SLOTS'], 0)
+    g.tick(20); g.dismiss()
+    clear_area(g, 17, 12, 23, 17, force=True)
+    to_town(g); to_farm(g)
+    g.go(17, 12)
+    g.symw8('_building', 1)
+    g.go_face(20, 12, 'down')
+    g.tick(4)
+    put_pet(g, 19 + FO, 13 + FO)        # the pet sits where the ghost's fence goes
+    g.tick(2)
+    c.eq(g.sym8('_ghost_w'), 5, 'ghost showing')
+    c.eq(g.actor_at(19, 13)[0], K_PET, 'pet inside the ghost')
+    bg = lambda x, y: g.pb.memory[0, 0x9800 + (((y + FO) * 2) & 31) * 32 + (((x + FO) * 2) & 31)]
+    c.eq(bg(19, 13), bg(20, 13), 'the ghost fence is drawn under the pet too')
+    y, x = pet_oam(g)
+    c.check(y != 0 and x != 0, f'pet sprite drawn ({x},{y})')
+    g.shot('pet_in_ghost')
+    pieces = 16 + 3 + 2
+    g.act()
+    g.wait_menu(14, YN_Y, 2)
+    g.yesno(True); g.tick(20); g.dismiss()
+    got = sum(1 for x in range(18, 23) for y in range(13, 18) if g.cell(x, y) == C_DECOR)
+    c.eq(got, pieces, "every piece stamped, the pet's cell too")
+    g.tick(10)
+    pet = [a for a in g.actors() if a[0] == K_PET][0]
+    c.check(pet[2:] != (19, 13), f'pet hopped off the fence (now at {pet[2:]})')
+    under = g.cell(*pet[2:])
+    c.check(under != C_DECOR or g.a1(*pet[2:]) in (DK_BRICK,), f'pet stands on open ground ({under})')
+    y, x = pet_oam(g)
+    c.check(y != 0 and x != 0, f'pet still drawn ({x},{y})')
+    g.shot('pet_hopped')
+
+
+# ------------------------------------------------------------------ town life: routines, heart events, festivals
+_routes_py = open(os.path.join(ROOT, 'tools/gen_routes.py')).read()
+SPOT = {n: (int(x), int(y)) for n, x, y in re.findall(r"\('(\w+)', (\d+), (\d+)\)", _routes_py)}
+_fest_c = _src('festival.c')
+HIDE = list(zip(_ints(_table(_fest_c, 'hide_x')), _ints(_table(_fest_c, 'hide_y'))))
+FEST_NEED = _ints(_table(_fest_c, 'need'))
+FEST_GOLD = _ints(_table(_fest_c, 'prize_gold'))
+FEST_CROP = _ints(_table(_fest_c, 'next_crop'))
+
+
+def npc_pos(g):
+    """{npc: (x, y)} of the townsfolk out in town"""
+    return {a[1]: a[2:] for a in g.actors() if a[0] == K_NPC}
+
+
+def wait_npcs(g, want, maxf=2400):
+    """tick until every npc in want ({npc: (x, y) or None for indoors}) is there"""
+    for _ in range(maxf // 20):
+        p = npc_pos(g)
+        if all(p.get(n) == xy for n, xy in want.items()):
+            return True
+        g.tick(20)
+    return False
+
+
+def next_tick(g, t):
+    """set the clock just before t and wait for the 10-minute tick to land on t"""
+    g.w16('time', t - 10)
+    for _ in range(80):
+        g.tick(20)
+        if g.u16('time') >= t:
+            return
+    raise Fail('the clock never ticked')
+
+
+def sym16(g, name):
+    return g.sym8(name) | g.sym8(name, 1) << 8
+
+
+def sym32(g, name):
+    return sum(g.sym8(name, k) << (8 * k) for k in range(4))
+
+
+def come_to_town(g):
+    """walk down the farm road into town WITHOUT dismissing anything (a heart event may be waiting)"""
+    g.go(15, WH - FO - 2)
+    g.step('down')
+    if g.u8('scene') != MAP_TOWN:       # (to_town's way: the last row warps when you face down on it)
+        g.face('down')
+        g.press('down', 4, 10)
+    for _ in range(60):
+        g.tick(10)
+        if g.u8('scene') == MAP_TOWN:
+            break
+    if g.u8('scene') != MAP_TOWN:
+        raise Fail('did not reach town')
+
+
+def re_enter_town(g):
+    to_farm(g)
+    to_town(g)
+
+
+@scenario('town_routines', base='town')
+def s_town_routines(c, g):
+    """townsfolk keep a schedule: shops staffed in opening hours, lunch at the cafe, home at night, Sundays off"""
+    c.eq(g.u8('day'), 1, 'a Monday')
+    want = {NPC_ROSA: SPOT['STORE'], NPC_BRICK: SPOT['SMITH'], NPC_JUNE: SPOT['CARP'], NPC_ADA: SPOT['CAFE'],
+            NPC_HOLLIS: SPOT['HALL'], NPC_MILO: SPOT['FOUNT_E']}
+    c.check(wait_npcs(g, want, 200), f'10am: everyone at work {npc_pos(g)}')
+    g.shot('ten_am')
+    # noon: the mayor and Milo walk to the cafe terrace for lunch
+    next_tick(g, 720)
+    c.check(npc_pos(g).get(NPC_HOLLIS) != SPOT['CAFE_T1'], 'Hollis walks there (not a teleport)')
+    c.check(wait_npcs(g, {NPC_HOLLIS: SPOT['CAFE_T1'], NPC_MILO: SPOT['CAFE_T2']}), f'lunch at the cafe {npc_pos(g)}')
+    g.shot('lunch')
+    # the hall is shut while Hollis is at lunch: the sign, not the hiring menu
+    g.go_face(16, 9, 'up'); g.act(); g.tick(40)
+    g.shot('hall_lunch_sign')
+    c.check(g.menu_live(0, 0, HALL_N) is None, 'no hall menu at lunch')
+    g.dismiss()
+    # 9pm: shops shut, everyone walks home and goes in
+    next_tick(g, 1260)
+    g.tick(60)
+    g.shot('going_home')
+    c.check(wait_npcs(g, {n: None for n in (NPC_ROSA, NPC_ADA, NPC_HOLLIS, NPC_MILO)}, 3000), f'home by 9pm {npc_pos(g)}')
+    g.go_face(11, 4, 'up'); g.act(); g.tick(40)
+    g.shot('store_closed_sign')
+    c.check(g.menu_live(0, 0, STORE_N) is None, 'store closed at night')
+    g.dismiss()
+    g.w16('time', 1340)
+    c.check(wait_npcs(g, {n: None for n in range(NUM_NPC)}, 3000), f'town asleep by 10:20pm {npc_pos(g)}')
+    g.shot('night')
+    # Sunday: the forge is closed and Brick spends the morning in the park
+    g.w8('day', 7); g.w16('time', 600)
+    re_enter_town(g)
+    c.check(wait_npcs(g, {NPC_BRICK: SPOT['PARK_E'], NPC_ROSA: SPOT['STORE']}, 200), f'Sunday 10am {npc_pos(g)}')
+    g.shot('sunday')
+    g.go_face(2, 4, 'up'); g.act(); g.tick(40)
+    c.check(g.menu_live(0, 0, 3) is None, 'forge closed on Sundays')
+    g.dismiss()
+    # rain: Milo is indoors after lunch, Brick goes back to the forge on a rainy weekday
+    g.w8('day', 2); g.w8('weather', 1); g.w16('time', 840)
+    re_enter_town(g)
+    p = npc_pos(g)
+    c.check(NPC_MILO not in p and p.get(NPC_BRICK) == SPOT['SMITH'], f'rainy Tuesday 2pm {p}')
+    g.shot('rain')
+
+
+def heart_scene(g, choice=0, maxp=80):
+    """advance a heart event: A through the lines, pick `choice` at the question, then play it out
+    (lines are separate dialogs with emote pauses between them: wait for the field to stay quiet)"""
+    g.wait_menu(0, 5, 2, advance='a', maxp=maxp)
+    g.shot('choice')
+    g.choose(0, 5, 2, choice)
+    quiet = 0
+    while quiet < 90:
+        g.tick(1)
+        if g.ui_open():
+            quiet = 0
+            g.press('a')
+        else:
+            quiet += 1
+
+
+@scenario('heart_events', base='town')
+def s_heart_events(c, g):
+    """at 1 heart Rosa's first scene plays on arrival (walk-in, emote, choice), once; the next waits for 2 hearts"""
+    g.w8('friend', 50, NPC_ROSA)
+    to_farm(g)
+    come_to_town(g)
+    for _ in range(200):                     # she walks up from the street
+        g.tick(4)
+        if g.ui_open():
+            break
+    g.shot('walk_in')
+    rosa = npc_pos(g).get(NPC_ROSA)
+    px, py = g.pos()
+    c.eq(rosa, (px + 1, py), 'Rosa walked up to your side')
+    c.check(g.sym8('_emo_kind') != 0, 'an emote bubble is up')
+    heart_scene(g, 0)
+    c.check(g.u8('heart_seen', NPC_ROSA) & 1, 'event recorded')
+    c.eq(g.u8('friend', NPC_ROSA), 50 + 12, 'kind answer +12')
+    c.eq(g.u8('heart_day'), g.u8('day') | g.u8('season') << 5, 'one a day')
+    g.shot('after')
+    # it never plays twice
+    to_farm(g)
+    come_to_town(g)
+    g.tick(120)
+    c.check(not g.ui_open(), 'no repeat on the next arrival')
+    g.dismiss()
+    # 2 hearts, another (dry) evening: the second scene
+    g.w8('friend', 100, NPC_ROSA); g.w8('heart_day', 0); g.w8('weather', 0); g.w16('time', 1150)
+    to_farm(g)
+    g.w16('time', 1150)
+    come_to_town(g)
+    for _ in range(300):
+        g.tick(4)
+        if g.ui_open():
+            break
+    heart_scene(g, 1)                        # 7pm, her 2-heart window: she walks up again; the other answer
+    c.check(g.u8('heart_seen', NPC_ROSA) & 2, 'second event recorded')
+    c.eq(g.u8('friend', NPC_ROSA), 100 + 4, 'other answer +4')
+    # npc_talk path: Milo at 1 heart, talked to where he stands
+    g.w8('friend', 49, NPC_MILO); g.w8('heart_day', 0); g.w16('time', 600)
+    re_enter_town(g)
+    talked = False
+    for _ in range(10):
+        p = npc_pos(g).get(NPC_MILO)
+        if p:
+            for d, (dx, dy, _) in DIRS.items():
+                if g.walkable(p[0] - dx, p[1] - dy):
+                    g.go(p[0] - dx, p[1] - dy); g.face(d)
+                    if g.actor_at(*p):
+                        g.act(); talked = True
+                    break
+        if talked:
+            break
+        g.tick(60)
+    c.require(talked, 'could not reach Milo')
+    heart_scene(g, 0)                        # talking (+2) tips him over 50: his first scene plays
+    c.check(g.u8('heart_seen', NPC_MILO) & 1, 'Milo event recorded from talking')
+    # the FRIENDS page shows hearts and the seen events
+    open_start(g, 4)
+    g.choose(8, 2, FARM_N, 3)
+    g.tick(30)
+    g.shot('friends_page')
+    c.eq(g.wtile(14, 3), GL_IT_STAR2, 'Rosa event 1 marked seen')
+    c.eq(g.wtile(15, 3), GL_IT_STAR2, 'Rosa event 2 marked seen')
+    g.dismiss()
+
+
+def fest_setup(g, season, day):
+    g.w8('season', season); g.w8('day', day); g.w8('weather', 0); g.w16('time', 600)
+    re_enter_town(g)
+
+
+def hall_festival(g):
+    g.go_face(16, 9, 'up'); g.act()
+    g.choose(0, 0, HALL_N + 1, 0)            # FESTIVAL
+    g.wait_menu(14, YN_Y, 2)
+    g.shot('join')
+    g.yesno(True)
+
+
+def fest_check(c, g, se, gold0, seeds0):
+    c.check(g.u8('ribbons') & (1 << se), 'blue ribbon won')
+    c.check(g.u8('fest_done') & (1 << se), 'prize taken this year')
+    c.check(g.u32('gold') >= gold0 + FEST_GOLD[se], f'prize gold (G{g.u32("gold") - gold0})')
+    c.eq(g.seeds(FEST_CROP[se], R_RARE), seeds0 + 3, '3 rare seeds for next season')
+    c.check(g.u8('fest_best', se) >= FEST_NEED[se], f'best score {g.u8("fest_best", se)}')
+
+
+@scenario('fest_egg_hunt', base='town')
+def s_fest_egg(c, g):
+    fest_setup(g, SEASON_SPRING, 14)
+    gold, seeds = g.u32('gold'), g.seeds(FEST_CROP[0], R_RARE)
+    p = npc_pos(g)
+    c.check(all(v in (SPOT['PLAZA_1'], SPOT['PLAZA_2'], SPOT['PLAZA_3'], SPOT['PLAZA_4'], SPOT['PLAZA_5'], SPOT['HALL'])
+                for v in p.values()), f'the town gathers at the plaza {p}')
+    g.go_face(11, 4, 'up'); g.act(); g.tick(30)
+    c.check(g.menu_live(0, 0, STORE_N) is None, 'the store is closed for the festival')
+    g.dismiss()
+    hall_festival(g)
+    g.tick(20); g.dismiss(btn='a'); g.wait_field()
+    c.eq(g.sym8('_fest_on'), 1, 'egg hunt running')
+    g.symw8('_egg_tmr', 0xFF); g.symw8('_egg_tmr', 0x7F, 1)   # plenty of time for the walking harness
+    mask = sym32(g, '_egg_mask')
+    eggs = [HIDE[i] for i in range(len(HIDE)) if mask >> i & 1]
+    c.eq(len(eggs), 8, 'eight eggs hidden')
+    empty = next(HIDE[i] for i in range(len(HIDE)) if not mask >> i & 1)
+    g.use_on(*empty); g.tick(10)
+    c.eq(g.sym8('_egg_got'), 0, 'an empty hiding spot')
+    found = 0
+    for (x, y) in eggs[:6]:
+        g.use_on(x, y); g.tick(10)
+        found += 1
+        if found == 1:
+            g.shot('found_egg')
+        c.eq(g.sym8('_egg_got'), found, f'egg at {(x, y)}')
+    g.shot('six_eggs')
+    g.symw8('_egg_tmr', 3); g.symw8('_egg_tmr', 0, 1)   # time's up
+    g.tick(30)
+    g.shot('hunt_over')
+    g.dismiss(); g.wait_field()
+    c.eq(g.sym8('_fest_on'), 0, 'hunt over')
+    fest_check(c, g, SEASON_SPRING, gold, seeds)
+    c.eq(g.u8('fest_best', 0), 6, 'best: 6 eggs')
+    open_start(g, 4); g.choose(8, 2, FARM_N, 4); g.tick(30)
+    g.shot('ribbon_in_goods')
+    c.eq(g.wtile(11, 12), GL_IT_STAR2, 'flower show ribbon in the GOODS log')
+    g.dismiss()
+
+
+@scenario('fest_koi_derby', base='town')
+def s_fest_koi(c, g):
+    fest_setup(g, SEASON_SUMMER, 14)
+    gold, seeds = g.u32('gold'), g.seeds(FEST_CROP[1], R_RARE)
+    hall_festival(g)
+    caught = 0
+    for cast in range(5):
+        for _ in range(900):                 # wait for the bite (pressing early spooks the koi); A only closes lines
+            if g.sym8('_fest_cue') == 1:
+                break
+            if g.ui_open():
+                g.press('a')
+            else:
+                g.tick(1)
+        c.require(g.sym8('_fest_cue') == 1, f'cast {cast + 1}: no bite')
+        if cast == 0:
+            g.shot('bite')
+        g.press('a', 2, 2)
+        g.tick(24)
+        if cast == 0:
+            g.shot('caught')
+        caught += 1
+    g.tick(30)
+    g.dismiss(); g.wait_field()
+    c.eq(g.pos(), (15, 13), 'fished at the fountain')
+    fest_check(c, g, SEASON_SUMMER, gold, seeds)
+
+
+@scenario('fest_judging', base='town')
+def s_fest_judging(c, g):
+    fest_setup(g, SEASON_FALL, 14)
+    g.w8('inv', 1, I_PUMPKIN * 3 + 2)        # a gold-star pumpkin
+    g.w8('inv', 2, I_RADISH * 3)
+    gold, seeds = g.u32('gold'), g.seeds(FEST_CROP[2], R_RARE)
+    hall_festival(g)
+    g.wait_menu(0, 0, 2)
+    g.shot('entry')
+    g.choose(0, 0, 2, 0)                     # best quality first: the pumpkin
+    for _ in range(600):                     # stop the polish needle in the middle
+        if g.sym8('_fest_cue') in (7, 8) and g.ui_open() and g.wtile(2, 5) != GL_FILL:
+            break
+        g.tick(1)
+    g.shot('polish')
+    g.press('a', 2, 4)
+    g.tick(20)
+    g.shot('judges')
+    g.dismiss(); g.wait_field()
+    fest_check(c, g, SEASON_FALL, gold, seeds)
+    c.eq(g.inv(I_PUMPKIN, 2), 1, 'the entry comes home with you')
+
+
+@scenario('fest_snowball', base='town')
+def s_fest_snowball(c, g):
+    fest_setup(g, SEASON_WINTER, 25)
+    gold, seeds = g.u32('gold'), g.seeds(FEST_CROP[3], R_RARE)
+    hall_festival(g)
+    keys = {1: 'left', 2: 'up', 3: 'right'}
+    hits = 0
+    for rnd_ in range(12):
+        for _ in range(600):
+            cue = g.sym8('_fest_cue')
+            if cue:
+                break
+            if g.ui_open() and g.wtile(2, 9) != font_tile('L'):
+                g.press('a')                 # the rules
+            else:
+                g.tick(1)
+        if rnd_ == 2:
+            g.shot('milo_pops_up')
+        g.press(keys[cue], 2, 2)
+        g.tick(30)
+    g.tick(40)
+    g.shot('snowball_done')
+    g.dismiss(); g.wait_field()
+    fest_check(c, g, SEASON_WINTER, gold, seeds)
+
+
+def font_tile(ch):
+    m = re.search(r'font_map\[\] = \{([^}]*)\}', open(os.path.join(ROOT, 'src/art_tables.c')).read())
+    return _ints(m.group(1))[ord(ch) - 32]
+
+
+# ------------------------------------------------------------------ the mine + the beach
+MINE_LAYOUTS = (MAP_MINE_A, MAP_MINE_B, MAP_MINE_C)
+
+
+def map_acts(map_id):
+    """[(x, y, act)] of a static map, from src/maps.c (m<id>_acts)"""
+    src = open(os.path.join(ROOT, 'src/maps.c')).read()
+    m = re.search(r'm%d_acts\[\] = \{(.*?)\};' % map_id, src)
+    return [tuple(CONST[v] if v in CONST else int(v) for v in a.split(',')) for a in re.findall(r'\{([\w,]+)\}', m.group(1))]
+
+
+def mine_layout(f):
+    return (MAP_MINE_A, MAP_MINE_B, MAP_MINE_C)[f % 3]
+
+
+def to_mine(g):
+    """town -> the west road -> the mine entrance"""
+    g.go(1, 4)
+    g.step('left')
+    g.wait_scene((MAP_MINE,))
+
+
+def reach_from(g, start):
+    """cells reachable on foot from start in the current scene"""
+    seen, q = {start}, deque([start])
+    while q:
+        c = q.popleft()
+        for dx, dy, _ in DIRS.values():
+            n = (c[0] + dx, c[1] + dy)
+            if n not in seen and g.walkable(*n):
+                seen.add(n)
+                q.append(n)
+    return seen
+
+
+def break_rock(c, g, x, y, maxhits=8):
+    """walk up to the rock at (x,y) and hammer it until it breaks; returns hits"""
+    g.w8('energy', 200)
+    for d, (dx, dy, _) in DIRS.items():
+        if g.walkable(x - dx, y - dy) and (x - dx, y - dy) in reach_from(g, g.pos()):
+            break
+    else:
+        raise Fail(f'no way to stand next to the rock at {(x, y)}')
+    g.go_face(x - dx, y - dy, d)
+    g.w8('tool', T_HAMMER)
+    for n in range(1, maxhits + 1):
+        g.act()
+        g.tick(14)
+        if not g.rock_at(x, y):
+            return n
+    raise Fail(f'rock at {(x, y)} did not break')
+
+
+def dig_to(c, g, tx, ty):
+    """break rocks until the rock at (tx,ty) is broken (clearing a way to it first)"""
+    for _ in range(60):
+        if not g.rock_at(tx, ty):
+            return
+        here = reach_from(g, g.pos())
+        # rocks touching the reachable area, the target first, then the one nearest the target
+        cand = sorted({(x, y) for (x, y) in g.rocks() for dx, dy, _ in DIRS.values() if (x - dx, y - dy) in here},
+                      key=lambda r: (r != (tx, ty), abs(r[0] - tx) + abs(r[1] - ty)))
+        if not cand:
+            raise Fail('no rock within reach')
+        break_rock(c, g, *cand[0])
+    raise Fail(f'could not dig to {(tx, ty)}')
+
+
+def take_ladder(c, g):
+    """find this floor's ladder (break its rock), step onto it, wait for the next floor"""
+    f = g.u8('mine_floor')
+    lx, ly = g.ladder()
+    c.require(lx != 0xFF, f'floor {f} has a ladder')
+    dig_to(c, g, lx, ly)
+    g.tick(10)
+    here = reach_from(g, g.pos())
+    for d, (dx, dy, _) in DIRS.items():
+        if (lx - dx, ly - dy) in here:
+            break
+    g.go(lx - dx, ly - dy)
+    g.face(d)
+    g.press(d, 4, 10)
+    for _ in range(60):
+        g.tick(10)
+        if g.u8('mine_floor') == f + 1 and g.u8('scene') == mine_layout(f + 1):
+            break
+    g.tick(30)
+    g.dismiss()
+    g.wait_field()
+    c.eq(g.u8('mine_floor'), f + 1, 'went down the ladder')
+
+
+def use_lift(c, g, stop_idx, nstops):
+    """stand in front of the lift (the act cell below the pulley), A, pick a stop (0 entrance, k floor 5k)"""
+    acts = [a for a in map_acts(g.u8('scene')) if a[2] == ACT_LIFT]
+    lx, ly = max(acts, key=lambda a: a[1])[:2]
+    g.go_face(lx, ly + 1, 'up')
+    g.act()
+    g.choose(0, 1, nstops, stop_idx)
+    want = (mine_layout(stop_idx * 5) if stop_idx else MAP_MINE, stop_idx * 5)
+    for _ in range(60):
+        g.tick(10)
+        if (g.u8('scene'), g.u8('mine_floor')) == want:
+            break
+    g.tick(60)
+    g.dismiss()
+    g.wait_field()
+
+
+@scenario('mine', base='town')
+def s_mine(c, g):
+    g.w8('energy', 200)
+    to_mine(g)
+    c.eq(g.pos(), (14, 3), 'arrive at the cave mouth')
+    c.eq(g.u8('mine_floor'), 0, 'at the entrance')
+    g.shot('entrance')
+    # the notice sign
+    g.go_face(3, 4, 'up')
+    g.act()
+    g.tick(20)
+    c.check(g.ui_open(), 'the mine sign reads')
+    g.shot('sign')
+    g.dismiss()
+    # the lift has no stops yet
+    g.go_face(7, 3, 'up')
+    g.act(); g.tick(20)
+    c.check(g.ui_open(), 'the lift explains itself')
+    g.dismiss()
+    # the shaft ladder down to floor 1
+    g.go(4, 3)
+    g.step('down')
+    for _ in range(60):
+        g.tick(10)
+        if g.u8('scene') == MAP_MINE_B:
+            break
+    g.tick(30); g.dismiss(); g.wait_field()
+    c.eq(g.u8('scene'), MAP_MINE_B, 'floor 1 uses layout B')
+    c.eq(g.u8('mine_floor'), 1, 'on floor 1')
+    c.eq(g.u8('mine_deep'), 1, 'deepest floor 1')
+    rocks = g.rocks()
+    c.check(len(rocks) >= 12, f'floor 1 has rocks ({len(rocks)})')
+    c.check(g.ladder() in rocks, 'the ladder hides under a rock')
+    px, py = g.pos()
+    c.check(all(abs(x - px) > 1 or abs(y - py) > 1 for x, y in rocks), 'the arrival spot is clear')
+    g.shot('floor1')
+    # break a rock with the basic hammer: energy and stone
+    seed = g.sym8('_mn_seed')
+    here = reach_from(g, g.pos())
+    plain = [r for r in rocks if rock_kind(*r, seed, 1) in (0, 1) and r != g.ladder()
+             and any((r[0] - dx, r[1] - dy) in here for dx, dy, _ in DIRS.values())]
+    c.require(plain, 'a plain rock within reach')
+    st, en = g.u16('stone'), g.u8('energy')
+    hits = break_rock(c, g, *plain[0])
+    g.shot('broke_rock')
+    c.eq(hits, 1, 'a plain rock breaks in one hit')
+    c.eq(g.u8('energy'), en - 2 * hits, '2 energy a strike')
+    c.check(g.u16('stone') > st or g.inv(I_COAL) or g.inv(I_AMETHYST), 'stone (or a lucky find) from the rock')
+    c.check(g.walkable(*plain[0]), 'the broken rock cell is open ground again')
+    # an ore node takes more hits with the basic hammer
+    here = reach_from(g, g.pos())
+    ore = [r for r in g.rocks() if rock_kind(*r, seed, 1) in (2, 3, 5) and r != g.ladder()]
+    if ore:
+        k = rock_kind(*ore[0], seed, 1)
+        item = {2: I_COPPER, 3: I_IRON, 5: I_COAL}[k]
+        n0 = g.inv(item)
+        dig_to(c, g, *ore[0])
+        c.check(g.inv(item) > n0, f'the ore node gave {ITEM_NAME[item]}')
+    else:
+        c.note('no ore node on floor 1 this time')
+    # the ladder, then down to floor 5 (a stronger hammer from here: one hit a rock)
+    g.w8('tier', 3, TT_HAMMER)
+    take_ladder(c, g)
+    g.shot('floor2')
+    c.eq(g.u8('scene'), MAP_MINE_C, 'floor 2 uses layout C')
+    for f in (2, 3, 4):
+        take_ladder(c, g)
+    c.eq(g.u8('mine_floor'), 5, 'reached floor 5')
+    c.eq(g.u8('mine_lift'), 5, 'the lift remembers floor 5')
+    c.eq(g.u8('mine_deep'), 5, 'deepest floor 5')
+    g.shot('floor5_lift_stop')
+    # back up the ladder to the entrance, then ride the lift down to 5
+    acts = [a for a in map_acts(g.u8('scene')) if a[2] == ACT_LADDERUP]
+    ux, uy = acts[0][:2]
+    g.go_face(ux, uy + 1, 'up')
+    g.act()
+    g.yesno(True)
+    g.wait_scene((MAP_MINE,))
+    c.eq(g.u8('mine_floor'), 0, 'climbed up to the entrance')
+    use_lift(c, g, 1, 2)
+    c.eq(g.u8('scene'), mine_layout(5), 'the lift went to floor 5')
+    c.eq(g.u8('mine_floor'), 5, 'on floor 5 by lift')
+    g.shot('lift_arrival')
+    # START > map shows the floor
+    open_start(g, 4)
+    g.choose(8, 2, FARM_N, 1)                # FARM > MAP
+    g.tick(20)
+    g.shot('mine_map')
+    c.check(any(g.wtile(x, 16) != GL_FILL for x in range(1, 12)), 'map page caption')
+    g.press('b'); g.tick(6); g.dismiss()
+    # deep down: lift to floor 20 (as if found on foot), find a gem node and break it
+    g.w8('mine_lift', 20)
+    use_lift(c, g, 4, 5)
+    c.eq(g.u8('mine_floor'), 20, 'the lift goes to floor 20')
+    c.eq(g.ladder()[0], 0xFF, 'no ladder below the bottom floor')
+    g.shot('floor20')
+    seed = g.sym8('_mn_seed')
+    gems = [r for r in g.rocks() if rock_kind(*r, seed, 20) == 6]
+    c.require(gems, 'a gem node on floor 20')
+    for it in range(NUM_ITEMS):
+        for q in range(3):
+            g.w8('inv', 0, it * 3 + q)
+    dig_to(c, g, *gems[0])
+    g.tick(60)
+    g.shot('gem')
+    got = [it for it in GEM_ITEMS if g.inv(it)]
+    c.check(len(got) == 1, f'a gem from the gem node ({[ITEM_NAME[i] for i in got]})')
+    # sell it to Brick: ride up, walk to town
+    use_lift(c, g, 0, 5)
+    c.eq(g.u8('scene'), MAP_MINE, 'the lift went up to the entrance')
+    for it in range(NUM_ITEMS):
+        if it not in got:
+            for q in range(3):
+                g.w8('inv', 0, it * 3 + q)
+    g.go(14, 3)
+    g.step('right')
+    g.wait_scene((MAP_TOWN,))
+    c.eq(g.pos(), (1, 4), 'back in town on the west road')
+    gem = got[0]
+    q = next(q for q in range(3) if g.u8('inv', gem * 3 + q))
+    gold = g.u32('gold')
+    g.go_face(2, 4, 'up')
+    g.act()
+    g.choose(0, 0, 3, 1)
+    g.wait_menu(0, 0, 1)
+    g.shot('sell_gem')
+    g.choose(0, 0, 1, 0)
+    g.quantity(1)
+    g.tick(10)
+    g.dismiss()
+    c.eq(g.u32('gold'), gold + ITEM_VALUE(gem, q), f'{ITEM_NAME[gem]} sold to Brick')
+    c.check(g.u8('shipped', gem >> 3) & (1 << (gem & 7)),
+            'the gem is in the collection log')
+
+
+@scenario('mine_passout', base='town')
+def s_mine_passout(c, g):
+    """2am on a mine floor: you collapse and wake up at home"""
+    to_mine(g)
+    g.go(4, 3)
+    g.step('down')
+    for _ in range(60):
+        g.tick(10)
+        if g.u8('scene') == MAP_MINE_B:
+            break
+    g.tick(30); g.dismiss(); g.wait_field()
+    c.eq(g.u8('mine_floor'), 1, 'on floor 1')
+    day = g.u8('day')
+    g.w16('time', 1550)
+    for _ in range(200):
+        g.tick(10)
+        if g.ui_open():
+            break
+    g.tick(30)
+    g.shot('collapse')
+    g.dismiss()
+    for _ in range(100):
+        g.tick(10)
+        if g.u8('day') != day:
+            break
+    g.after_night()
+    g.shot('morning')
+    c.eq(g.u8('scene'), SCENE_FARM, 'woke up on the farm')
+    c.eq(g.u8('day'), day + 1, 'next day')
+
+
+def beach_to(g):
+    g.go(30, 15)
+    g.step('right')
+    g.wait_scene((MAP_BEACH,))
+
+
+def fish_once(c, g, tag):
+    """cast (already facing water with the rod), wait for the bite, reel it in; True if caught"""
+    n0 = g.u16('stat_fish')
+    g.act()
+    g.tick(10)
+    bite = False
+    for _ in range(260):
+        g.tick(1)
+        if g.pb.get_sprite(2).tile_identifier == SPR_EXCLAIM:
+            bite = True
+            break
+    if not bite:
+        g.dismiss()
+        return False
+    g.press('a', 2, 2)
+    g.tick(10)
+    g.shot(f'reel_{tag}')
+    held = False
+    for f in range(3000):
+        if not g.ui_open():
+            break
+        fish = zone = None
+        for i in range(16):
+            if g.wtile(2 + i, 13) == GL_IT_FISH:
+                fish = i
+            if zone is None and g.wtile(2 + i, 14) == GL_BAR_FULL:
+                zone = i
+        if fish is not None and zone is not None:
+            want = fish > zone + 1
+            if want != held:
+                (g.pb.button_press if want else g.pb.button_release)('a')
+                held = want
+        elif fish is None and zone is None and f > 30:
+            break
+        g.tick(1)
+    if held:
+        g.pb.button_release('a')
+    for _ in range(240):
+        g.tick(1)
+        if g.ui_open() or g.u16('stat_fish') > n0:
+            break
+    g.tick(30)
+    g.shot(f'caught_{tag}')
+    g.dismiss()
+    return g.u16('stat_fish') > n0
+
+
+@scenario('beach', base='town')
+def s_beach(c, g):
+    g.w8('energy', 200)
+    beach_to(g)
+    c.eq(g.pos(), (1, 5), 'arrive on the beach path')
+    stamp = g.u8('beach_stamp')
+    c.check(stamp != 0, 'today stamped')
+    c.eq(g.u8('beach_taken'), 0, 'nothing picked yet today')
+    g.shot('arrive')
+    # forage everything that washed up today
+    finds = [(k, beach_item(k, stamp, 0)) for k in range(len(BEACH_SPOTS)) if beach_item(k, stamp, 0) is not None]
+    c.check(len(finds) >= 2, f'things washed up ({len(finds)})')
+    for k, it in finds:
+        x, y = BEACH_SPOTS[k]
+        n0 = g.inv(it)
+        g.use_on(x, y)
+        g.tick(20)
+        c.check(g.inv(it) == n0 + 1, f'picked up {ITEM_NAME[it]} at {(x, y)}')
+        c.check(g.u8('beach_taken') & (1 << k), f'spot {k} taken')
+        if k == finds[0][0]:
+            g.shot('forage')
+        g.dismiss()
+    c.eq(beach_item(0, stamp, 0xFF), None, 'all taken')
+    g.shot('foraged')
+    # the beach shack's tide board
+    g.go_face(12, 3, 'up')
+    g.act(); g.tick(20)
+    c.check(g.ui_open(), 'tide board reads')
+    g.shot('tide_board')
+    g.dismiss()
+    # START > map
+    open_start(g, 4)
+    g.choose(8, 2, FARM_N, 1)                # FARM > MAP
+    g.tick(20)
+    g.shot('beach_map')
+    c.check(any(g.wtile(x, 16) != GL_FILL for x in range(1, 12)), 'beach map caption')
+    g.press('b'); g.tick(6); g.dismiss()
+    # ocean fishing off the end of the pier
+    g.rich()
+    caught = False
+    for attempt in range(5):
+        g.go_face(15, 15, 'down')
+        g.w8('tool', T_ROD)
+        if fish_once(c, g, attempt):
+            caught = True
+            break
+    c.check(caught, 'caught an ocean fish')
+    ocean = [it for it in range(I_SARDINE, I_SQUID + 1) if g.inv(it)]
+    c.check(len(ocean) == 1, f'the catch is an ocean fish ({[ITEM_NAME[i] for i in ocean]})')
+    c.eq(sum(g.inv(i) for i in range(I_MINNOW, I_KOI + 1)), 0, 'no lake or river fish from the sea')
+    # a new day: everything washes up again
+    g.go(1, 5)
+    g.step('left')
+    g.wait_scene((MAP_TOWN,))
+    c.eq(g.pos(), (30, 15), 'back in town on the south road')
+    g.w8('day', g.u8('day') + 1)
+    beach_to(g)
+    c.check(g.u8('beach_stamp') != stamp, 'a new day')
+    c.eq(g.u8('beach_taken'), 0, 'finds respawned overnight')
+    g.shot('next_day')
+
+
+# ------------------------------------------------------------------ cooking + the valley restoration
+DISH_COUNT = CONST['NUM_DISHES']
+I_DISH0_ = I_SALAD
+BUFF_SPEED, BUFF_ALL = CONST['BUFF_SPEED'], CONST['BUFF_ALL']
+VALLEY_GOLD = [int(v) for v in re.findall(r'\},\s*(\d+)\}', _table(_src('valley.c'), 'proj'))]
+
+
+def kitchen(g):
+    """A on the fridge (already faced): read any lines, wait for the recipe book"""
+    g.act()
+    g.wait_menu(0, 0, 9)
+
+
+def step_frames(g, d):
+    """frames from pressing a direction until the player lands on the next cell"""
+    g.face(d)
+    x, y = g.pos()
+    g.pb.button_press(d)
+    n = 0
+    while g.pos() == (x, y) and n < 40:
+        g.tick(1)
+        n += 1
+    g.pb.button_release(d)
+    g.tick(8)
+    return n
+
+
+@scenario('cooking')
+def s_cooking(c, g):
+    """buy a fridge, find Grandpa's recipe cards, cook an omelet, learn a recipe from the TV show,
+    eat dishes from the bag (energy + buffs on the HUD), buffs end overnight; dishes are loved gifts"""
+    g.enter_house()
+    g.w32('gold', 5000)
+    furn_build(g, 0, FK_FRIDGE)
+    g.go_face(6, 5, 'up')
+    g.act(); g.tick(10)
+    g.press('b'); g.tick(6)
+    c.require(g.furn_at(6, 4) and g.furn_at(6, 4)[1] == FK_FRIDGE, 'fridge placed at 6,4')
+    c.eq(g.u16('recipes'), 0, 'no recipes before the kitchen')
+    g.w8('inv', 2, I_EGG * 3); g.w8('inv', 1, I_MILK * 3)
+    g.w8('inv', 1, I_PUMPKIN * 3)
+    kitchen(g)
+    c.eq(g.u16('recipes'), 3, "Grandpa's cards: Salad + Omelet")
+    g.shot('recipe_book')
+    c.check(g.wtile(17, 2) == GL_IT_STAR2, 'omelet marked ready (gold star)')
+    g.press('down', 2, 4)               # hover the omelet: its panel
+    g.tick(10)
+    g.shot('omelet_panel')
+    g.press('down', 2, 4); g.press('down', 2, 4)    # an unknown recipe: the hint panel
+    g.tick(10)
+    g.shot('unknown_panel')
+    g.choose(0, 0, 9, 1)                # Omelet
+    g.tick(10)
+    g.shot('quantity')
+    g.press('a')                        # x1
+    g.tick(12)
+    g.shot('cooking')
+    g.wait_field()
+    g.tick(140)                         # the chop-sizzle-steam animation runs after the book closes
+    g.shot('cooked')
+    c.eq(g.inv(I_OMELET), 1, 'one omelet cooked')
+    c.eq(g.inv(I_EGG), 0, 'two eggs used')
+    c.eq(g.inv(I_MILK), 0, 'milk used')
+    c.eq(g.inv(I_PUMPKIN), 1, 'unrelated goods untouched')
+    c.eq(g.u16('stat_cooked'), 1, 'cooked count')
+    # missing ingredients: nothing happens
+    kitchen(g)
+    g.choose(0, 0, 9, 1)
+    g.tick(20); g.shot('missing')
+    g.dismiss()
+    c.eq(g.inv(I_OMELET), 1, 'no omelet without eggs')
+    # page two, then out
+    kitchen(g)
+    g.choose(0, 0, 9, 8)
+    g.wait_menu(0, 0, 9)
+    g.tick(10); g.shot('page2')
+    g.dismiss()
+    # the Sunday cooking show teaches Fish Fry
+    g.w8('day', 7)
+    x, y, d = g.furn_spot(FK_TV)
+    g.go_face(x, y, d)
+    g.act(); g.tick(80); g.shot('tv_show')
+    g.dismiss()
+    c.check(g.u16('recipes') & (1 << (I_FISHFRY - I_DISH0_)), 'TV show taught Fish Fry')
+    # eat the omelet from the bag: +45 energy, no buff
+    g.w8('energy', 10)
+    open_start(g, 2)
+    g.tick(20)
+    g.press('down', 2, 4)               # the omelet, under the pumpkin
+    g.tick(10); g.shot('bag_dish')
+    g.press('a')
+    g.yesno(True)
+    g.tick(20); g.shot('ate')
+    g.dismiss(); g.wait_field()
+    c.eq(g.inv(I_OMELET), 0, 'omelet eaten')
+    c.eq(g.u8('energy'), 55, 'omelet restores 45 energy')
+    c.eq(g.u8('buff'), 0, 'omelet gives no buff')
+    c.eq(g.wtile(4, 0), GL_HUD_BLANK, 'no buff mark on the HUD')
+    # Apple Pie: Brisk -- you walk at a run
+    slow = step_frames(g, 'left')
+    g.w8('inv', 1, I_APPLEPIE * 3)
+    open_start(g, 2)
+    g.tick(10)
+    g.press('down', 2, 4)               # apple pie sits under the pumpkin in the bag
+    g.press('a')
+    g.yesno(True)
+    g.dismiss(); g.wait_field()
+    c.check(g.u8('buff') & BUFF_SPEED, 'apple pie: Brisk buff')
+    c.eq(g.wtile(4, 0), GL_HUD_BUFF, 'buff mark on the HUD')
+    g.shot('buff_hud')
+    fast = step_frames(g, 'right')
+    c.check(fast < slow, f'brisk walking is faster ({fast} vs {slow} frames a step)')
+    # Feast: every buff, energy to full
+    g.w8('inv', 1, I_FEAST * 3)
+    g.w8('energy', 5)
+    open_start(g, 2)
+    g.tick(10)
+    g.press('down', 2, 4)
+    g.press('a')
+    g.yesno(True)
+    g.dismiss(); g.wait_field()
+    c.eq(g.u8('buff'), BUFF_ALL, 'feast: every buff')
+    c.eq(g.u8('energy'), g.u8('energy_max'), 'feast: full energy')
+    # buffs end with the day
+    g.sleep(stay=True)
+    c.eq(g.u8('buff'), 0, 'buffs cleared overnight')
+    c.eq(g.wtile(4, 0), GL_HUD_BLANK, 'HUD buff mark gone in the morning')
+
+
+def hall_board(g):
+    """town hall (ordinary day): Hollis's menu -> VALLEY: the restoration board"""
+    g.go_face(16, 9, 'up'); g.act()
+    g.choose(0, 0, HALL_N, 1)                # VALLEY
+    g.wait_menu(0, 0, CONST['NUM_PROJ'], advance='a')
+
+
+def donate_all(g, n):
+    """in a project's list (n item rows + the gold row): give every row"""
+    for k in range(n + 1):
+        g.choose(0, 0, n + 1, k)
+        g.yesno(True)
+        g.tick(10)
+        if k < n:
+            g.wait_menu(0, 0, n + 1)
+
+
+@scenario('valley', base='town')
+def s_valley(c, g):
+    """the Valley Restoration board: donate the Town Garden's crops + gold, the park becomes a garden,
+    the Sorbet recipe and a letter from Grandpa arrive; the FARM > VALLEY page shows it"""
+    g.w32('gold', 9000)
+    need = {I_RADISH: 5, I_TOMATO: 3, I_PUMPKIN: 2, I_SNOWPEA: 2}
+    for it, n in need.items():
+        g.w8('inv', n + 1, it * 3)
+    hall_board(g)
+    c.check(g.u8('cook_flags') & 2, 'Hollis introduced the board')
+    g.tick(10); g.shot('board')
+    g.choose(0, 0, 6, 0)                # Town Garden
+    g.wait_menu(0, 0, 5)
+    g.tick(10); g.shot('project')
+    g.choose(0, 0, 5, 0)                # radish x5
+    g.yesno(True); g.tick(10)
+    c.eq(g.inv(I_RADISH), 1, 'five radishes donated')
+    c.eq(g.u8('valley', 0), 1, 'radish slot done')
+    g.wait_menu(0, 0, 5)
+    g.shot('one_donated')
+    for k in (1, 2, 3):
+        g.choose(0, 0, 5, k); g.yesno(True); g.tick(10)
+        g.wait_menu(0, 0, 5)
+    c.eq(g.u8('valley_done'), 0, 'not done before the gold')
+    g.choose(0, 0, 5, 4)                # G1000
+    g.yesno(True)
+    g.tick(40); g.shot('complete')
+    g.wait_menu(0, 0, 6)
+    g.shot('board_after')
+    g.dismiss()
+    c.check(g.u8('valley_done') & 1, 'Town Garden restored')
+    c.eq(g.u32('gold'), 9000 - VALLEY_GOLD[0], 'gold paid')
+    for it in need:
+        c.eq(g.inv(it), 1, f'{ITEM_NAME[it]} donated')
+    c.check(g.u16('recipes') & (1 << (I_SORBET - I_DISH0_)), 'Sorbet recipe as the reward')
+    c.check(g.u32('mail') & (1 << CONST['MAIL_VALLEY']), "Grandpa's letter is on its way")
+    g.go(15, 17)
+    g.tick(20)
+    g.shot('park_garden')
+    # the progress page
+    open_start(g, 4)
+    g.choose(8, 2, FARM_N, 6)
+    g.tick(30); g.shot('valley_page')
+    c.eq(g.wtile(17, 2), GL_IT_STAR2, 'garden starred on the VALLEY page')
+    g.dismiss()
+    # the letter
+    to_farm(g)
+    g.go_face(13, 9, 'left'); g.act()
+    g.tick(60); g.shot('letter')
+    g.dismiss()
+    c.eq(g.u32('mail') & (1 << CONST['MAIL_VALLEY']), 0, 'letter read')
+
+
+@scenario('valley_finale', base='town')
+def s_valley_finale(c, g):
+    """the last project (the Valley Fountain) after the other five: the town celebrates, credits roll,
+    the fountain is rebuilt, the lamps glow and the park is an orchard; then the game goes on"""
+    g.w8('cook_flags', 2)
+    g.w8('valley_done', 0x1F)
+    for p in range(5):
+        g.w8('valley', 0x3F, p)
+    g.w8('valley', 0x1F, 5)             # every item given; only the gold is left
+    g.w32('gold', VALLEY_GOLD[5] + 5000)
+    g.w16('time', 960)                  # 4pm: the hall is open (Hollis keeps 9 to 5)
+    hall_board(g)
+    g.shot('board_all')
+    g.choose(0, 0, 6, 5)
+    g.wait_menu(0, 0, 6)
+    g.choose(0, 0, 6, 5)                # the gold row
+    g.yesno(True)
+    shots = 0
+    for _ in range(80):                 # read the celebration until the credits card is up
+        g.tick(30)
+        if g.ui_open() and g.wtile(3, 0) == GL_HDR_L:   # the credits card's title tab
+            break
+        if shots < 3 and g.ui_open():
+            g.shot(f'celebration_{shots}'); shots += 1
+        g.press('a')
+    g.tick(400)
+    g.shot('credits')
+    c.check(g.u8('valley_done') & 0x20, 'Valley Fountain finished')
+    g.press('a'); g.tick(20)
+    g.dismiss()
+    g.wait_field()
+    c.eq(g.u8('valley_done'), 0xBF, 'all six done + the celebration seen')
+    c.eq(g.u32('gold'), VALLEY_GOLD[5] + 5000 - VALLEY_GOLD[5], 'fountain gold paid')
+    c.eq(g.pos(), (15, 14), 'the celebration ends in front of the fountain')
+    g.w16('time', 1200)                 # 8pm: the lamps
+    g.tick(20); g.shot('fountain')
+    g.go(10, 14)
+    g.tick(20); g.shot('lamps')
+    g.go(15, 18)
+    g.tick(20); g.shot('orchard')
+    c.eq(g.u8('scene'), MAP_TOWN, 'still playing in town')
+
+
+# ------------------------------------------------------------------ town investment (biz.c, invest.c)
+MK_OPEN, MK_GATE_Y = CONST['MK_OPEN'], CONST['MK_GATE_Y']
+STYLE_PRICE = CONST.get('STYLE_PRICE', 4000)
+INV_MARKET_PRICE, INV_LOT_PRICE = (int(re.search(r'#define %s (\d+)' % k, _invest_c).group(1)) for k in ('MARKET_PRICE', 'LOT_PRICE'))
+BIZ_BREWERY, BIZ_RESTAURANT, BIZ_INN = CONST['BIZ_BREWERY'], CONST['BIZ_RESTAURANT'], CONST['BIZ_INN']
+LOT_Y = 23
+
+
+def biz_door(b, lot=None):
+    """the cell in front of a business's door (bottom middle of its 3x3)"""
+    if b < 4:
+        x, y = BIZ_SPOT[b]
+        return x + 1, y + 3
+    return LOT_X[lot] + 1, LOT_Y + 3
+
+
+def biz_menu(g, b, idx, lot=None):
+    g.go_face(*biz_door(b, lot), 'up')
+    g.act()
+    g.choose(0, 0, BIZ_MENU_N, idx)
+
+
+def prosperity_of(g):
+    pts = sum((2 if b < 4 else 3) for b in range(8) if g.u8('biz_owned') & (1 << b))
+    pts += sum((g.u8('biz_look', b) >> 2) & 3 for b in range(8) if g.u8('biz_owned') & (1 << b))
+    pts += 2 if g.u8('mk_flags') & MK_OPEN else 0
+    pts += 4 * bin(g.u8('town_proj') & 0x3F).count('1')
+    return sum(1 for t in _ints(_table(_invest_c, 'pts_level')) if pts >= t)
+
+
+def to_market(g, x, y):
+    """through the open gate south of the park"""
+    g.go(13, 20)
+    g.go(x, y)
+
+
+@scenario('storefront_styles', base='town')
+def s_storefront_styles(c, g):
+    """renovate the bakery in Modern style, add the three facade tiers (art changes each time, prices),
+    every storefront in a different look; the looks survive a save + continue"""
+    g.w8('biz_owned', 1)
+    g.w32('gold', 100000)
+    re_enter_town(g)
+    g.go(BIZ_SPOT[0][0] + 1, BIZ_SPOT[0][1] + 4)
+    g.shot('classic_t0')
+    before = bg_tiles(g)
+    biz_menu(g, 0, 3)                                  # Facade
+    g.wait_menu(0, 0, 3)
+    g.tick(10); g.shot('facade_menu')
+    g.choose(0, 0, 3, 0)                               # Style
+    g.wait_menu(0, 0, 4)
+    g.press('down'); g.tick(20)
+    g.shot('style_preview_modern')
+    g.press('a')
+    g.yesno(True); g.tick(20)
+    g.wait_menu(0, 0, 3)
+    c.eq(g.u8('biz_look', 0) & 3, 1, 'bakery is Modern now')
+    c.eq(g.u32('gold'), 100000 - STYLE_PRICE, 'renovation price')
+    gold = g.u32('gold')
+    for t in range(3):
+        g.choose(0, 0, 3, 1)                           # Upgrade
+        g.wait_menu(14, YN_Y, 2)
+        if t == 0:
+            g.shot('upgrade_preview')
+        g.yesno(True); g.tick(20)
+        g.wait_menu(0, 0, 3)
+        c.eq((g.u8('biz_look', 0) >> 2) & 3, t + 1, f'facade tier {t + 1}')
+        gold -= BIZ_TIER_PRICE[t]
+        c.eq(g.u32('gold'), gold, f'tier {t + 1} price')
+    g.tick(10); g.shot('facade_t3_menu')
+    g.dismiss()
+    g.go(BIZ_SPOT[0][0] + 1, BIZ_SPOT[0][1] + 4)
+    g.tick(10); g.shot('modern_t3')
+    c.check(bg_tiles(g) != before, 'the storefront was redrawn')
+    # one storefront in each style, at different tiers
+    g.w8('biz_owned', 0x0F)
+    looks = [1 | 3 << 2, 2 | 1 << 2, 3 | 2 << 2, 0 | 3 << 2]
+    for b, lk in enumerate(looks):
+        g.w8('biz_look', lk, b)
+    re_enter_town(g)
+    g.go(27, 11); g.tick(10); g.shot('north_row')
+    g.go(4, 20); g.tick(10); g.shot('creamery_cottage')
+    g.go(27, 20); g.tick(10); g.shot('florist_classic')
+    # status shows the look and the customer bonus
+    biz_menu(g, 1, 1)
+    g.tick(20); g.shot('status'); g.dismiss()
+    # the looks are saved
+    to_farm(g)
+    g.sleep()
+    boot_title(g)
+    g.choose(1, 9, 3, 0)
+    g.choose(8, 4, 3, 0)
+    g.tick(60); g.dismiss(); g.wait_field()
+    for b, lk in enumerate(looks):
+        c.eq(g.u8('biz_look', b), lk, f'business {b} look after save + continue')
+    if g.in_house():
+        g.leave_house()
+    g.w16('time', 600)
+    to_town(g)
+    g.go(27, 11); g.tick(10); g.shot('after_continue')
+
+
+@scenario('market_street', base='town')
+def s_market_street(c, g):
+    """Market Street is closed until bought at the Land Office (prosperity 1+); buy it and a lot, build a
+    Cabin brewery (scaffold overnight), stock it, and it brews and sells ales the next night"""
+    g.go_face(13, 20, 'down')
+    g.act(); g.tick(20); g.shot('gate_for_sale'); g.dismiss()
+    g.press('down', 4, 20)
+    c.eq(g.pos(), (13, 20), 'the closed gate blocks the way')
+    g.w8('biz_owned', 0x03)                           # two storefronts: prosperity 1
+    g.w32('gold', 200000)
+    c.eq(prosperity_of(g), 1, 'prosperity 1')
+    g.go_face(24, 14, 'up'); g.act()
+    g.choose(0, 3, 2, 1)                               # Land Office: Market St
+    g.wait_menu(14, YN_Y, 2)
+    g.shot('buy_market')
+    g.yesno(True)
+    g.wait_menu(0, 3, 4)
+    c.check(g.u8('mk_flags') & MK_OPEN, 'Market Street bought')
+    g.tick(10); g.shot('lots')
+    g.choose(0, 3, 4, 0)                               # lot 1
+    g.yesno(True)
+    g.wait_menu(0, 3, 4)
+    g.dismiss()
+    c.check(g.u8('mk_flags') & 1, 'lot 1 bought')
+    c.eq(g.u32('gold'), 200000 - INV_MARKET_PRICE - INV_LOT_PRICE, 'district + lot price')
+    to_market(g, 13, 24)
+    g.tick(10); g.shot('market_street_open')
+    g.go_face(*biz_door(4, 0), 'up'); g.act()
+    g.wait_menu(0, 0, 4)
+    g.tick(10); g.shot('build_menu')
+    g.choose(0, 0, 4, 0)                               # Brewery
+    g.choose(0, 0, 4, 2)                               # Log Cabin
+    g.yesno(True); g.tick(20); g.dismiss()
+    c.check(g.u8('biz_owned') & (1 << BIZ_BREWERY), 'brewery owned')
+    c.eq(g.u8('biz_lot', 0), 1, 'on lot 1')
+    c.eq(g.u8('biz_look', BIZ_BREWERY), 2 | 0x80, 'Log Cabin, building tonight')
+    g.go(3, 27); g.tick(10); g.shot('scaffold')
+    g.go_face(*biz_door(4, 0), 'up'); g.act(); g.tick(10); g.shot('builders'); g.dismiss()
+    to_farm(g)
+    g.morning_find = ('Grand opening', 'grand_opening')
+    g.sleep()
+    c.eq(g.u8('biz_look', BIZ_BREWERY), 2, 'open this morning')
+    g.w16('time', 600)
+    to_town(g)
+    g.w8('inv', 10, I_CORN * 3)
+    g.w8('inv', 5, I_HERB * 3)
+    to_market(g, 3, 27)
+    g.tick(10); g.shot('brewery_cabin')
+    biz_menu(g, 4, 0, lot=0)                           # Stock
+    g.choose(0, 0, 2, 0); g.quantity(10); g.tick(10)
+    g.choose(0, 0, 1, 0); g.quantity(5); g.tick(10)
+    g.dismiss()
+    c.eq(g.u8('bz_pantry', 0 * 8 + 0), 10, '10 corn on the shelf')
+    c.eq(g.u8('bz_pantry', 0 * 8 + 7), 5, '5 herbs on the shelf')
+    to_farm(g)
+    gold = g.u32('gold')
+    p = prosperity_of(g)
+    g.morning_find = ('Brewery sold', 'brewery_report')
+    g.sleep()
+    want = 3 * ((ITEM_PRICE[I_CORN] + ITEM_PRICE[I_HERB]) * BIZ_PQ[BIZ_BREWERY] // 4) * (100 + BIZ_PCT_PROSP * p) // 100
+    c.eq(g.u16('bz_today', 0), want, f'three craft ales (herb + corn) x {BIZ_PQ[BIZ_BREWERY] / 4}, + prosperity')
+    c.eq(g.u8('bz_sold', 0), 3, 'sold 3')
+    c.eq(g.u32('gold') - gold, want, 'paid overnight')
+
+
+@scenario('restaurant_inn', base='town')
+def s_restaurant_inn(c, g):
+    """a restaurant serving cooked dishes with fresh sides, an inn with rooms + breakfasts (and the inn's
+    visitors lift the restaurant); hiring a manager costs a nightly wage"""
+    g.w8('mk_flags', MK_OPEN | 0x06)
+    g.w8('biz_owned', (1 << BIZ_RESTAURANT) | (1 << BIZ_INN))
+    g.w8('biz_lot', 2, 2); g.w8('biz_lot', 3, 3)
+    g.w8('biz_look', 3 | 2 << 2, BIZ_RESTAURANT); g.w8('biz_look', 1 | 3 << 2, BIZ_INN)
+    g.w32('gold', 50000)
+    g.w8('inv', 4, I_OMELET * 3); g.w8('inv', 4, I_TOMATO * 3)
+    re_enter_town(g)
+    to_market(g, 21, 27)
+    g.tick(10); g.shot('restaurant_inn')
+    biz_menu(g, BIZ_RESTAURANT, 0, lot=1)              # Stock: the bag's dishes and produce
+    g.wait_menu(0, 0, 2)
+    g.tick(10); g.shot('restaurant_stock')
+    g.choose(0, 0, 2, 0); g.quantity(4); g.tick(10)    # tomato (item order)
+    g.choose(0, 0, 1, 0); g.quantity(4); g.tick(10)    # omelet (the tomatoes are all shelved)
+    g.dismiss()
+    shelf = {g.u8('rest_item', k) - 1: g.u8('bz_pantry', 2 * 8 + k) for k in range(8) if g.u8('rest_item', k)}
+    c.eq(shelf, {I_TOMATO: 4, I_OMELET: 4}, 'restaurant shelves')
+    for k, (it, n) in enumerate(((I_EGG, 2), (I_MILK, 2), (I_HONEY, 2))):
+        g.w8('bz_pantry', n, 3 * 8 + k)
+    biz_menu(g, BIZ_INN, 1, lot=2)
+    g.tick(20); g.shot('inn_status'); g.dismiss()
+    to_farm(g)
+    p = prosperity_of(g)
+    g.morning_find = ('businesses earned', 'two_businesses_report')
+    g.sleep()
+    tiers_r, tiers_i = 2, 3
+    rest = 4 * ((ITEM_PRICE[I_OMELET] + ITEM_PRICE[I_TOMATO]) * BIZ_PQ[BIZ_RESTAURANT] // 4)   # 6 + 2 (facade) ingredients: 4 specials
+    c.eq(g.u16('bz_today', 4), rest * (100 + BIZ_PCT_TIER * tiers_r + BIZ_PCT_PROSP * p + BIZ_PCT_INN) // 100,
+         'four chef specials, + facade, prosperity, inn visitors')
+    inn = 2 * ((ITEM_PRICE[I_EGG] + ITEM_PRICE[I_MILK] + ITEM_PRICE[I_HONEY]) * BIZ_PQ[BIZ_INN] // 4) + (4 + tiers_i + p) * INN_RATE
+    c.eq(g.u16('bz_today', 6), inn * (100 + BIZ_PCT_TIER * tiers_i + BIZ_PCT_PROSP * p) // 100, 'two breakfasts + the rooms')
+    c.eq(sum(g.u8('rest_item', k) for k in range(8)), 0, 'empty restaurant shelves are freed')
+    # a manager
+    g.w16('time', 600)
+    to_town(g)
+    to_market(g, 27, 27)
+    biz_menu(g, BIZ_INN, 4, lot=2)                     # Staff
+    g.yesno(True); g.tick(20); g.dismiss()
+    c.check(g.u8('biz_staffed') & (1 << BIZ_INN), 'inn manager hired')
+    to_farm(g)
+    gold = g.u32('gold')
+    g.sleep()
+    c.eq(gold - g.u32('gold') + g.u16('bz_today', 6) + g.u16('bz_today', 4), 40, 'the manager wage (40) came out first')
+
+
+@scenario('community', base='town')
+def s_community(c, g):
+    """Hollis's INVEST: the overview, a community project (Square Paving: the streets change, prosperity
+    rises), a locked tier, the commons once Market Street is open, the library's recipe, Rosa's goods"""
+    g.w32('gold', 150000); g.w16('wood', 300); g.w16('stone', 300)
+    g.w8('biz_owned', 0x01); g.w16('biz_today', 1234, 0)
+    g.go(16, 10); g.tick(10); g.shot('plaza_before')
+    before = bg_tiles(g)
+    g.go_face(16, 9, 'up'); g.act()
+    g.choose(0, 0, HALL_N, HALL_N - 2)                # INVEST (before BYE)
+    g.wait_menu(0, 0, 4)
+    c.check(g.u8('inv_tips') & 1, 'Hollis pitched investing')
+    g.choose(0, 0, 4, 0)                               # Overview
+    g.tick(20); g.shot('overview')
+    g.press('a'); g.tick(10)
+    g.choose(0, 0, 4, 1)                               # Community
+    g.wait_menu(0, 0, 6)
+    g.tick(10); g.shot('projects')
+    g.choose(0, 0, 6, 2)                               # Boardwalk: needs prosperity 2
+    g.tick(20); g.shot('locked'); g.wait_menu(0, 0, 6)
+    c.eq(g.u8('town_proj'), 0, 'locked project not built')
+    g.choose(0, 0, 6, 0)                               # Square Paving
+    g.yesno(True); g.tick(30); g.shot('paving_done')
+    g.wait_menu(0, 0, 6)
+    c.check(g.u8('town_proj') & CONST['TP_PAVING'], 'paving built')
+    c.eq((g.u32('gold'), g.u16('stone')), (150000 - TPROJ[0][0], 300 - TPROJ[0][2]), 'gold + stone donated')
+    c.eq(prosperity_of(g), 1, 'prosperity 1 now')
+    g.dismiss()
+    g.go(16, 10); g.tick(10); g.shot('plaza_paved')
+    c.check(bg_tiles(g) != before, 'the plaza changed')
+    # more of the town: the commons, the boardwalk (poked), Rosa's goods at prosperity 2+
+    g.w8('mk_flags', MK_OPEN); g.w8('biz_owned', 0x0F)
+    g.go_face(16, 9, 'up'); g.act()
+    g.choose(0, 0, HALL_N, HALL_N - 2)
+    g.choose(0, 0, 4, 1)
+    g.choose(0, 0, 6, 1)                               # Playground (Market Street commons)
+    g.yesno(True); g.tick(30)
+    g.wait_menu(0, 0, 6)
+    c.check(g.u8('town_proj') & CONST['TP_PLAYGROUND'], 'playground built')
+    g.dismiss()
+    g.w8('town_proj', 0x3F)
+    re_enter_town(g)
+    g.go(28, 15); g.tick(10); g.shot('boardwalk')
+    to_market(g, 13, 27)
+    g.tick(10); g.shot('commons_west')
+    g.go(19, 27); g.tick(10); g.shot('commons_east')
+    rec = g.u16('recipes')
+    g.go(21, 31); g.go_face(21, 31, 'up'); g.act(); g.tick(30); g.shot('library'); g.dismiss()
+    c.check(g.u16('recipes') != rec, 'the library gave a recipe')
+    g.go_face(11, 4, 'up'); g.act()
+    g.wait_menu(0, 0, STORE_N + 1)
+    g.shot('store_goods')
+    g.choose(0, 0, STORE_N + 1, 6)                     # Goods
+    g.choose(0, 3, 3, 0); g.quantity(2); g.tick(10)
+    c.eq(g.inv(I_EGG), 2, "bought 2 eggs from Rosa's traders")
+    g.dismiss()
+
+
+@scenario('market_showcase', base='town')
+def s_market_showcase(c, g):
+    """the whole town invested in: every storefront in its own style and facade, Market Street with its four
+    businesses, all six community projects; in the evening Hollis walks down to the bandstand"""
+    g.w8('biz_owned', 0xFF)
+    g.w8('mk_flags', MK_OPEN | 0x0F)
+    for k in range(4):
+        g.w8('biz_lot', k + 1, k)
+    looks = [0 | 3 << 2, 1 | 2 << 2, 3 | 3 << 2, 2 | 1 << 2, 2 | 3 << 2, 3 | 2 << 2, 1 | 3 << 2, 0 | 3 << 2]
+    for b, lk in enumerate(looks):
+        g.w8('biz_look', lk, b)
+    g.w8('town_proj', 0x3F)
+    re_enter_town(g)
+    c.eq(prosperity_of(g), 5, 'a thriving town: prosperity 5')
+    g.go(16, 10); g.tick(10); g.shot('plaza')
+    g.go(27, 11); g.tick(10); g.shot('north_shops')
+    g.go(14, 20); g.tick(10); g.shot('gate_open')
+    to_market(g, 6, 26); g.tick(10); g.shot('market_west')
+    g.go(24, 26); g.tick(10); g.shot('market_east')
+    g.go(8, 31); g.tick(10); g.shot('commons_west')
+    g.go(20, 31); g.tick(10); g.shot('commons_east')
+    g.go_face(16, 27, 'down'); g.act(); g.tick(20); g.shot('bandstand'); g.dismiss()
+    # evenings on Market Street: Hollis's 7pm stroll in the park ends at the bandstand now
+    g.w16('time', 1140)
+    re_enter_town(g)
+    c.check(wait_npcs(g, {NPC_HOLLIS: SPOT['BAND']}, 2400), f'Hollis at the bandstand at 7pm {npc_pos(g)}')
+    to_market(g, 14, 25); g.tick(10); g.shot('evening_bandstand')
+
+
+# ------------------------------------------------------------------ economy (tools/econ_model.py, docs/BALANCE.md)
+def pass_night(g):
+    """the quickest real night: stay up past 2am and collapse (world_overnight(1)), then the morning report"""
+    day = g.u8('day')
+    g.w16('time', 1550)
+    for _ in range(200):
+        g.tick(10)
+        if g.ui_open():
+            break
+    g.dismiss()
+    for _ in range(100):
+        g.tick(10)
+        if g.u8('day') != day:
+            break
+    g.after_night()
+
+
+def owned_soil(g):
+    """(tilled tiles, growing crops) on the home valley (the only land these scenarios own)"""
+    soil = [i for i in range(1024) if g.u8('cell', i) == C_SOIL]
+    return len(soil), sum(1 for i in soil if g.u8('a1', i) & SOIL_CROP not in (0, CROP_WITHERED))
+
+
+@scenario('econ_year')
+def s_econ_year(c, g):
+    """a scripted year of real nights (112, by passing out) on a mid-game farm: a greenhouse strawberry field with a
+    waterer and a harvester, six Jersey cows with a rancher, a stocked Bakery (kitchen 1, awning + window boxes,
+    a manager) and a Brewery on Market Street. Every night the ROM's wages and business takings must equal
+    tools/econ_model.py's formulas exactly, and the year's shipping must land within a few percent of the
+    model's expected value (quality rolls are dice)"""
+    import econ_model as M
+    g.w32('gold', 400000)
+    for t in (B_BARN, B_GREENHOUSE):                       # Grandpa's barn and greenhouse, repaired
+        k = g.bld_find(t)
+        g.w8('bld', g.u8('bld', k * BLD_SIZE + 3) & ~BF_RUIN, k * BLD_SIZE + 3)
+    barn = g.bld_find(B_BARN)
+    field = [(x, y) for y in range(14, 20) for x in range(10, 18) if (x, y) != (13, 16)]   # home field, owned
+    for n, (x, y) in enumerate(field):                     # fertilized strawberries, growth staggered over 8 days
+        g.setcell(x, y, C_SOIL, 3 | SOIL_FERT | SOIL_WET, n % CROP_DAYS[3])
+    g.setcell(13, 16, C_DECOR, DK_SCARECROW, 0)            # guards the whole field from crows
+    g.setcell(9, 14, C_DECOR, DK_ROD, 0)                   # and the rod from summer lightning
+    for r in (ROLE_WATER, ROLE_HARVEST, ROLE_RANCH):
+        g.w8('staff', r + 1, r)
+    for k in range(6):
+        g.set_anim(k, A_COW, barn, happy=220, age=30, flags=R_RARE << 6, name='Cow')
+    g.w16('hay', 999)
+    # the Bakery: kitchen 1, facade tier 2, a manager; the Brewery on lot 1, kitchen 0
+    g.w8('biz_owned', 0x01 | (1 << BIZ_BREWERY))
+    g.w8('biz_staffed', 0x01)
+    g.w8('biz_level', 1, 0)
+    g.w8('biz_look', 2 << 2, 0)
+    g.w8('mk_flags', MK_OPEN | 1)
+    g.w8('biz_lot', 1, 0)
+    pan_b, pan_w = BIZ_PAN[0], BIZ_PAN[BIZ_BREWERY]
+    stock = {('biz_pantry', 0, pan_b.index(it)): 0 for it in (I_EGG, I_MILK, I_PUMPKIN)}
+    stock.update({('bz_pantry', 0, pan_w.index(it)): 0 for it in (I_CORN, I_HERB)})
+    g.w8('weather', 0); g.w8('tomorrow', 0)
+    ship_total = want_ship = biz_total = 0.0
+    bad_biz, bad_wage = [], []
+    milk = 2 * M.PRICE[M.I['MILK']] + 2 * (M.PRICE[M.I['MILK']] >> 1)      # a rare cow: two gold-star milk a night
+    for night in range(M.DAYS_YEAR):
+        for (field_name, blk, slot) in stock:              # the player keeps the shelves stocked
+            if g.u8(field_name, blk * CONST['PANTRY'] + slot) < 30:
+                g.w8(field_name, 99, blk * CONST['PANTRY'] + slot)
+        pan0 = {k: g.u8('biz_pantry', k) for k in range(CONST['PANTRY'])}
+        pan4 = {k: g.u8('bz_pantry', k) for k in range(CONST['PANTRY'])}
+        soil, crops = owned_soil(g)
+        plots = g.plots_n()
+        n_anim = len(g.animals())
+        want_wage = [M.wage(r, plots, soil, crops, n_anim) for r in range(3)]
+        P = M.prosperity(sum((2 if b < 4 else 3) for b in range(8) if g.u8('biz_owned') & (1 << b))
+                         + sum((g.u8('biz_look', b) >> 2) & 3 for b in range(8) if g.u8('biz_owned') & (1 << b))
+                         + (2 if g.u8('mk_flags') & MK_OPEN else 0) + 4 * bin(g.u8('town_proj') & 0x3F).count('1'))
+        v0 = M.run_one(0, pan0, 1, 2, True)[0]
+        v4 = M.run_one(BIZ_BREWERY, pan4, 0, 0, False)[0]
+        want0 = min(65535, int(v0 * M.biz_mult(2, P, True, False, 0)))
+        want4 = min(65535, int(v4 * M.biz_mult(0, P, False, False, BIZ_BREWERY)))
+        ripe = sum(1 for (x, y) in field if g.cell(x, y) == C_SOIL and (g.a1(x, y) & SOIL_CROP) == 3
+                   and (g.a2(x, y) & SOIL_DAYS) >= CROP_DAYS[3] - 1)
+        gold = g.u32('gold')
+        pass_night(g)
+        got0, got4 = g.u16('biz_today', 0), g.u16('bz_today', 0)
+        if (got0, got4) != (want0, want4):
+            bad_biz.append((night, got0, want0, got4, want4))
+        got_w = [g.u16('staff_wage', 2 * r) for r in range(3)]   # (u16 index = byte offset)
+        if got_w != want_wage:
+            bad_wage.append((night, got_w, want_wage))
+        mgr = M.MGR_WAGE[0] + M.MGR_WAGE[1] * 1
+        shipped = g.u32('gold') - gold - got0 - got4 + sum(got_w) + mgr
+        ship_total += shipped
+        biz_total += got0 + got4
+        # the model's expectation for tonight: every strawberry that ripens is picked and shipped, every cow milked
+        fed = sum(1 for _, a in g.animals() if a['flags'] & AF_FED)   # fed last night: milk waiting tonight
+        want_ship += ripe * M.harvest_value(3, 0, 1, hand=False) + fed * milk
+        if night in (0, 27, 55, 83, 111):
+            g.shot(f'night_{night + 1:03d}')
+        if g.u8('staff', ROLE_HARVEST) == 0 or g.u8('staff', ROLE_WATER) == 0:
+            c.check(False, f'a farmhand quit on night {night + 1}')
+            break
+    c.eq(bad_biz[:3], [], 'business takings = econ_model run_one x biz_mult, every night (night, got, want)')
+    c.eq(bad_wage[:3], [], 'farmhand wages = econ_model wage(), every night (night, got, want)')
+    c.eq((g.u8('year'), g.u8('season'), g.u8('day')), (2, SEASON_SPRING, 1), 'a full year later: Year 2, Spring 1')
+    ratio = ship_total / max(1.0, want_ship)
+    c.notes.append(f'year: shipped G{ship_total:.0f} vs model G{want_ship:.0f} (x{ratio:.3f}); shops G{biz_total:.0f}')
+    c.check(0.94 <= ratio <= 1.06, f'shipping within 6% of the model (x{ratio:.3f})')
+    c.check(g.u32('gold') > 400000, f'the farm made money over the year (G{g.u32("gold")})')
+    # the HUD's gold: thousands with a k past 9999, clamped at 999k
+    g.w32('gold', 345678); g.tick(450)
+    c.eq([g.wtile(x, 0) for x in (16, 17, 18)], [GL_HUD_0 + 3, GL_HUD_0 + 4, GL_HUD_0 + 5], 'HUD gold 345k')
+    c.eq(g.wtile(19, 0), GL_HUD_K, 'k suffix')
+    g.shot('hud_345k')
+    g.w32('gold', 1234567); g.tick(450)                    # a millionaire: four figures over the coin, not stuck at 999k
+    c.eq([g.wtile(x, 0) for x in range(15, 20)], [GL_HUD_0 + 1, GL_HUD_0 + 2, GL_HUD_0 + 3, GL_HUD_0 + 4, GL_HUD_K],
+         'HUD gold 1234k')
+    g.shot('hud_1234k')
+
+
+@scenario('balance_rules', base='town')
+def s_balance_rules(c, g):
+    """the balance pass's rules on the ROM: food restores at most one more full bar a day (Ada's and dishes share it),
+    a legendary regrower settles into a rare one after its first crop, Rosa's traders' goods cost 4x"""
+    g.w32('gold', 50000)
+    em = g.u8('energy_max')
+    g.w8('energy', 1)
+    g.w16('time', 480)                                     # 8am: Ada is behind her counter
+    g.go_face(19, 4, 'up'); g.act()
+    g.choose(0, 4, 4, 2)                                   # the feast: back to full
+    g.tick(20); g.dismiss(); g.wait_field()
+    c.eq(g.u8('energy'), em, 'a feast fills the bar')
+    c.eq(g.u8('ate'), em - 1, 'what it restored is counted')
+    c.eq(g.u32('gold'), 50000 - CAFE_PRICE[2], 'feast price')
+    for k in range(2):                                     # coffee: still allowed (the bar isn't used up), then not
+        g.w8('energy', 1)
+        g.w16('time', 480)                                 # 8am: Ada is behind her counter
+        g.go_face(19, 4, 'up'); g.act()
+        g.choose(0, 4, 4, 0)
+        g.tick(20)
+        if k:
+            g.shot('too_full')
+        g.dismiss(); g.wait_field()
+    c.eq(g.u32('gold'), 50000 - CAFE_PRICE[2] - CAFE_PRICE[0], 'no charge once full')
+    c.check(g.u8('ate') >= em, 'a full bar eaten today')
+    # a dish is refused too
+    for it in range(NUM_ITEMS * 3):                        # only an omelet in the bag
+        g.w8('inv', 0, it)
+    g.w8('inv', 1, I_OMELET * 3)
+    g.w8('energy', 10)
+    to_farm(g)
+    open_start(g, 2)
+    g.tick(20)
+    g.press('a')
+    g.tick(20); g.shot('dish_too_full')
+    g.dismiss(); g.wait_field()
+    c.eq(g.inv(I_OMELET), 1, 'the omelet is still in the bag')
+    c.eq(g.u8('energy'), 10, 'no energy from it')
+    pass_night(g)
+    c.eq(g.u8('ate'), 0, 'a new day, a new appetite')
+    # a legendary strawberry: 3-4 at the first crop, then the bush is a rare one
+    g.setcell(9, 14, C_SOIL, 3 | SOIL_WET, (R_LEGEND << 6) | CROP_DAYS[3])
+    clear_area(g, 9, 13, 9, 13)
+    have = g.inv(I_STRAWB)
+    g.go_face(9, 13, 'down'); g.w8('tool', T_HAND); g.act(); g.tick(10); g.dismiss()
+    c.check(g.inv(I_STRAWB) - have in (3, 4), f'legendary first crop 3-4 (got {g.inv(I_STRAWB) - have})')
+    c.eq(g.a1(9, 14) & SOIL_CROP, 3, 'the strawberry stays planted')
+    c.eq(g.a2(9, 14) >> 6, R_RARE, 'and settles into a rare one')
+    c.eq(g.a2(9, 14) & SOIL_DAYS, CROP_DAYS[3] - CROP_REGROW[3], 'regrowing')
+    # Rosa's money box for a millionaire
+    g.w32('gold', 1234567)
+    to_town(g)
+    g.w16('time', 600)
+    g.go_face(11, 4, 'up'); g.act()
+    g.wait_menu(0, 0, STORE_N)
+    g.shot('money_box_1234k')
+    g.dismiss(); g.wait_field()
 
 
 BASES = {'farm': (None, new_game), 'cleared': ('farm', make_cleared), 'town': ('farm', make_town)}
@@ -2596,6 +5216,8 @@ def main():
     rom = os.path.join(qa, 'qa.gbc')            # private copy: its battery file is ours to wipe
     shutil.copy(args.rom, rom)
     shutil.copy(args.rom.replace('.gbc', '.map'), rom.replace('.gbc', '.map'))
+    if os.path.exists(args.rom.replace('.gbc', '.noi')):
+        shutil.copy(args.rom.replace('.gbc', '.noi'), rom.replace('.gbc', '.noi'))
     g = Game(rom, qa)
     bases = {}
     results = []

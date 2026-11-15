@@ -34,7 +34,6 @@ static const char *const letters[NUM_GOALS] = {
 static const uint16_t rewards[NUM_GOALS] = {200, 300, 200, 300, 500, 300, 200, 500, 1000, 1500, 5000,
                                             1000, 5000, 1000, 800, 1000, 2000, 1500, 500, 800, 2000};
 
-static uint8_t popcount16(uint16_t v) { uint8_t n = 0; while (v) { n += v & 1; v >>= 1; } return n; }
 
 static uint8_t goal_met(uint8_t g) {
     uint8_t k, h = bld_find(B_HOUSE), lv = h != 0xFF ? (G.bld[h].flags & BF_LVL) >> 1 : 0, n;
@@ -42,7 +41,7 @@ static uint8_t goal_met(uint8_t g) {
     case 0: return G.stat_harvest >= 1;
     case 1: return G.earned >= 1000;
     case 2: return G.stat_weeds >= 50;
-    case 3: return G.plots != START_PLOTS;
+    case 3: return plots_owned() > 4;
     case 4:
         for (k = 0; k < MAX_BLD; k++)
             if ((G.bld[k].type == B_BARN || G.bld[k].type == B_COOP || G.bld[k].type == B_GREENHOUSE) && !(G.bld[k].flags & BF_RUIN)) return 1;
@@ -51,17 +50,17 @@ static uint8_t goal_met(uint8_t g) {
     case 6: return G.stat_fish >= 1;
     case 7: return lv >= 1;
     case 8: return lv >= 2;
-    case 9: return popcount16(G.plots) >= 8;
-    case 10: return G.plots == 0xFFFF;
+    case 9: return plots_owned() >= NUM_PLOTS / 2;
+    case 10: return plots_owned() == NUM_PLOTS;
     case 11: return G.earned >= 10000;
     case 12: return G.earned >= 100000;
     case 13: for (k = 0; k < NUM_NPC; k++) if (G.friend[k] >= 150) return 1; return 0;
-    case 14: n = 0; for (k = 0; k < NUM_ITEMS; k++) if (G.shipped[k >> 3] & (1 << (k & 7))) n++; return n >= 20;
+    case 14: n = 0; for (k = 0; k < NUM_ITEMS; k++) if (is_shipped(k)) n++; return n >= 20;
     case 15: n = 0; for (k = 0; k < MAX_BLD; k++) if (G.bld[k].type != 0xFF) n++; return n >= 8;
     case 16: for (k = 0; k < NUM_TT; k++) if (G.tier[k] >= 3) return 1; return 0;
     case 17: return G.stat_harvest >= 100;
     case 18: return G.style != 0;
-    case 19: return popcount16(G.plots) >= 5;
+    case 19: return plots_owned() >= 5;
     default: return 0;   // 20: giant pumpkin, set by the harvest itself
     }
 }
@@ -83,11 +82,11 @@ void goals_check(void) BANKED {
 static void review(void) {
     uint16_t score = 0;
     uint8_t k, n = 0;
-    score += popcount16(G.plots) * 4;
+    score += plots_owned();   // the whole valley: 64, as much as the old 16 plots x 4
     for (k = 0; k < MAX_BLD; k++) if (G.bld[k].type != 0xFF) score += 4;
     for (k = 0; k < MAX_ANIMALS; k++) if (G.anim[k].kind != 0xFF) score += 3;
     for (k = 0; k < NUM_NPC; k++) score += G.friend[k] / 25;
-    for (k = 0; k < NUM_ITEMS; k++) if (G.shipped[k >> 3] & (1 << (k & 7))) n++;
+    for (k = 0; k < NUM_ITEMS; k++) if (is_shipped(k)) n++;
     score += n * 2;
     score += (uint16_t)(G.earned / 2000 > 100 ? 100 : G.earned / 2000);
     set_speaker("Grandpa");
@@ -109,6 +108,13 @@ void read_mail(void) BANKED {
         uint32_t bit = 1UL << g;
         if (!(G.mail & bit)) continue;
         G.mail &= ~bit;
+        if (g >= MAIL_VALLEY && g < MAIL_VALLEY + NUM_PROJ) {   // valley.c: a restoration letter
+            music_play(MUS_JINGLE_FANFARE);
+            valley_letter(g - MAIL_VALLEY);
+            music_for_scene();
+            if (G.mail) say("There's another letter in there.");
+            return;
+        }
         if (g != GOAL_REVIEW && g >= NUM_GOALS) continue;   // no jingle left playing for a skipped bit
         music_play(MUS_JINGLE_FANFARE);
         if (g == GOAL_REVIEW) { review(); music_for_scene(); return; }
@@ -169,68 +175,55 @@ static uint8_t festival_today(void) {
 }
 
 void hall_act(void) BANKED {
-    uint8_t k, bit = 1 << G.season;
     set_speaker("Hollis");
-    if (festival_today()) {
-        static const char *const names[4] = {"Flower Show", "Crop Fair", "Harvest Festival", "Star Night"};
-        s_clr(); s_add("Welcome to the "); s_add(names[G.season]); s_add("!");
-        say(sbuf);
-        if (G.festival_won & bit) { say("You already took home the prize this year. Enjoy the festival!"); ui_speaker = 0; return; }
-        if (G.season == SEASON_SPRING) {
-            uint8_t flowers = 0;
-            uint16_t i;
-            for (i = 0; i < 1024; i++)
-                if (G.cell[i] == C_DECOR && G.a1[i] >= DK_FLOWERBED && G.a1[i] <= DK_FLOWERS_YELLOW) flowers++;
-            say("The judges toured every garden in the valley this morning...");
-            if (flowers >= 8) { say("...and yours was the most beautiful! First prize goes to you!"); G.gold += 500; G.festival_won |= bit; }
-            else say("...a lovely effort! Plant at least 8 flower beds for a shot at first prize next year.");
-        } else if (G.season == SEASON_SUMMER) {
-            uint8_t gold_crop = 0;
-            for (k = 0; k < NUM_CROPS; k++) if (G.inv[k][2]) gold_crop = 1;
-            if (gold_crop) { say("A gold-star crop! Nobody can beat that. First prize!"); G.gold += 1000; G.festival_won |= bit; }
-            else say("Bring a gold-star crop to win. Fertilizer helps!");
-        } else if (G.season == SEASON_FALL) {
-            uint32_t v = 0;
-            uint8_t q;
-            for (k = 0; k < NUM_ITEMS; k++) for (q = 0; q < 3; q++) v += (uint32_t)G.inv[k][q] * item_value(k, q);
-            if (v >= 5000) { say("What a harvest you've brought! The biggest display at the fair. First prize!"); G.gold += 1500; G.festival_won |= bit; }
-            else say("Bring at least G5000 worth of goods to the fair to win the grand prize!");
-        } else {
-            uint16_t f = 0;
-            for (k = 0; k < NUM_NPC; k++) f += G.friend[k];
-            if (f >= 400) { say("The whole town gathered to thank you for being such a good friend this year. Merry Star Night!"); G.gold += 1000; G.festival_won |= bit; }
-            else say("Star Night is about friends. Get to know everyone in town!");
-        }
-        hud_draw();
-    } else {
-        uint8_t plots = popcount16(G.plots), d = G.season == SEASON_WINTER ? 25 : 14;
+    if (festival_today()) say("Festival day! The whole town's out by the fountain. Have you joined this year's game?");
+    else {
+        uint8_t plots = plots_owned(), d = G.season == SEASON_WINTER ? 25 : 14;
         say("Welcome to town hall! I keep the calendar and cheer on our farmers.");
         s_clr();
         if (G.day < d) { s_add("The next festival is on "); s_add(season_name[G.season]); s_ch(' '); s_num(d, 0); s_add(". Don't miss it!"); }
         else s_add("This season's festival has passed. See you next season!");
         say(sbuf);
-        s_clr(); s_add("Your farm covers "); s_num(plots, 0); s_add(" of 16 plots. ");
-        s_add(plots >= 12 ? "A true estate!" : plots >= 8 ? "Quite the spread!" : "Room to grow!");
+        s_clr(); s_add("Your farm covers "); s_num(plots, 0); s_add(" of 64 plots. ");
+        s_add(plots >= 48 ? "A true estate!" : plots >= 32 ? "Quite the spread!" : "Room to grow!");
         say(sbuf);
     }
+    if (!(G.cook_flags & 2)) valley_board();   // valley.c: Hollis tells you about the restoration board
     ui_speaker = 0;
 }
 
 // ---------------------------------------------------------------- collection log
-void collection_page(void) BANKED {
-    uint8_t k, n = 0;
+// Two pages of 8 a row (LEFT/RIGHT flips): 1/2 the farm's goods (items 0..39); 2/2 the mine and the sea
+// (40..53, rows 2-4) and the kitchen's dishes (rows 6-8). Ribbons and the count sit under both.
+static void goods_draw(uint8_t page) {
+    uint8_t k, i, slot, last = page ? NUM_ITEMS - 40 : 40;
     ui_box(0, 0, 20, 17);
-    ui_title(2, 0, "GOODS");
-    for (k = 0; k < NUM_ITEMS; k++) {
-        uint8_t have = G.shipped[k >> 3] & (1 << (k & 7));
-        ui_char(2 + (k % 8) * 2, 2 + (k / 8) * 2, have ? item_icon_tile[k] : font_map['?' - 32]);
-        if (have) n++;
+    ui_title(2, 0, page ? "GOODS 2/2" : "GOODS 1/2");
+    for (i = 0; i < last; i++) {
+        k = page ? 40 + i : i;
+        slot = (page && k >= I_DISH0) ? i + 2 : i;   // dishes start on a fresh row
+        ui_char(2 + (slot & 7) * 2, 2 + (slot >> 3) * 2, is_shipped(k) ? item_icon_tile[k] : font_map['?' - 32]);
     }
-    s_clr(); s_add("Sold "); s_num(n, 0); s_ch('/'); s_num(NUM_ITEMS, 0); s_add(" goods");   // fits inside the box
+    {   // town life: festival blue ribbons (flower, koi, produce, star) with a gold star once won
+        static const uint8_t rib_icon[4] = {GL_IT_FLOWER, GL_IT_FISH, GL_IT_MELON, GL_IT_STAR};
+        ui_text(2, 12, "Ribbons");
+        for (k = 0; k < 4; k++) {
+            ui_char(10 + k * 2, 12, rib_icon[k]);
+            ui_char(11 + k * 2, 12, (G.ribbons & (1 << k)) ? GL_IT_STAR2 : font_map['-' - 32]);
+        }
+    }
+    for (k = 0, i = 0; k < NUM_ITEMS; k++) if (is_shipped(k)) i++;
+    s_clr(); s_add("Sold "); s_num(i, 0); s_ch('/'); s_num(NUM_ITEMS, 0); s_add(" goods");   // fits inside the box
     ui_text(2, 14, sbuf);
+}
+
+void collection_page(void) BANKED {
+    uint8_t page = 0;
+    goods_draw(0);
     while (1) {
         read_input();
         if (joy_press & (J_A | J_B | J_START)) { sfx(SFX_CURSOR); return; }
+        if (joy_press & (J_LEFT | J_RIGHT)) { page ^= 1; sfx(SFX_CURSOR); goods_draw(page); }
         wait_vbl_done();
     }
 }

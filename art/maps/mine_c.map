@@ -1,0 +1,30 @@
+# Mine floor layout C (floors 2, 5, 8, ...): a winding gallery with side pockets.
+map MINE_C set=MINE w=16 h=16 music=MINE
+key c MINE_CEIL block
+key # MINE_WALL block
+key t MINE_WALL_TORCH block
+key . MINE_FLOOR walk
+key , MINE_FLOOR2 walk
+key _ MINE_FLOOR3 walk
+key U MINE_LADDER_UP block
+key ~ MINE_PUDDLE water
+key p MINE_PILLAR block
+grid
+cccccccccccccccc
+cccc#t#_#Uccc#tc
+cccc.__.__cc#..c
+c#t#..__.,##.,.c
+c.,....,.....p.c
+c....cc....,...c
+c..,.##..,.....c
+c,......cccc...c
+cc..p...####.,.c
+c#.......,.....c
+c..,..~~.....,.c
+c.....~~..ccc..c
+c.,.......###..c
+c...,..p.....,.c
+c.......,......c
+cccccccccccccccc
+place MINE_LIFT 7 1 act=LIFT
+act 9 1 LADDERUP

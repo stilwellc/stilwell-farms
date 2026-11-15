@@ -28,7 +28,7 @@ const DecorDef decor[NUM_DECOR] = {
     {"Bench", MT_BENCH, 0, 0, 0, 6, 0},
     {"Scarecrow", MT_SCARECROW, 0, 0, 80, 4, 0},
     {"Sprinkler", MT_SPRINKLER, 0, 0, 300, 0, 5},
-    {"Big Sprinkler", MT_QSPRINKLER, 0, 0, 1200, 0, 10},
+    {"Big Sprinkler", MT_QSPRINKLER, 0, 0, 800, 0, 10},
     {"Beehive", MT_BEEHIVE, 0, 0, 500, 10, 0},
     {"Lightning Rod", MT_LIGHTNING_ROD, 0, 0, 400, 0, 6},
     {"Hay Bale", MT_HAY_BALE, 0, 0, 20, 0, 0},
