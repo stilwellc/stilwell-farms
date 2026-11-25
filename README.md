@@ -117,7 +117,7 @@ boxes. Every building style has its own walls and floor.
 <td width="50%" valign="middle">
 
 ### Saddle up.
-Build a stable and Rosa will sell you a horse: white, chestnut or palomino. Name it, brush it every
+Build a stable and Alyssa will sell you a horse: white, chestnut or palomino. Name it, brush it every
 day and it grows fond of you. Climb on and the farm goes by at twice walking speed.
 
 </td>
@@ -128,7 +128,7 @@ day and it grows fond of you. Climb on and the farm goes by at twice walking spe
 <td width="50%" valign="middle">
 
 ### Hire some help.
-Mayor Hollis knows folks in town who want work. Hire a Waterer, a Harvester, a Rancher and a
+Mayor Joe knows folks in town who want work. Hire a Waterer, a Harvester, a Rancher and a
 Groundskeeper. They show up on your farm by day and do their jobs overnight. Wages grow with the farm.
 
 </td>
@@ -160,12 +160,17 @@ community garden, a library) and watch Town Prosperity climb.
 <td width="50%" valign="middle">
 
 ### A town with a life of its own.
-Rosa, Brick, June, Ada, Mayor Hollis and Milo keep their own hours: open up shop, meet for lunch on the
+Alyssa, Brick, Andy, Raza, Mayor Joe and Marcy keep their own hours: open up shop, meet for lunch on the
 cafe terrace, head to the bandstand in the evening. They wave as you pass, and as friendships grow
-they come find you for heart events, little scenes you remember.
+they come find you for heart events, little scenes you remember. From 4pm, Corey opens the Thirsty Scarecrow by the park: root beer, pie or stew when the cafe has closed.
+
+Every business has a name over the door: Seeds & Needs (Alyssa's general store), The Grumpy Anvil (the forge),
+Knock on Wood (Andy's carpentry), Bean There (Raza's cafe), Lots & Plots (Joe's land office), and the ones you
+open yourself: Rise & Pie, Main Squeeze, Udder Delight, Petal Pushers, Hoppy Days, Grape Escape, Thyme & Again
+and the Snooze Inn.
 
 </td>
-<td width="50%"><img src="docs/media/townlife.gif" alt="Townsfolk walking to lunch, greetings, and Rosa's first heart event" width="100%"></td>
+<td width="50%"><img src="docs/media/townlife.gif" alt="Townsfolk walking to lunch, greetings, and Alyssa's first heart event" width="100%"></td>
 </tr>
 <tr>
 <td width="50%"><img src="docs/media/festivals.gif" alt="Egg hunt, koi derby, giant produce judging and a snowball fight" width="100%"></td>
@@ -273,7 +278,7 @@ Renovate your house and every farm building into one of four styles.
 
 ## The people of the valley.
 
-<img src="docs/media/characters.png" alt="Rosa, Brick, June, Ada, Mayor Hollis, Milo, Grandpa, you and Buddy" width="860">
+<img src="docs/media/characters.png" alt="Alyssa, Brick, Andy, Raza, Mayor Joe, Marcy, Grandpa, you and Buddy" width="860">
 
 </div>
 
@@ -288,8 +293,10 @@ Renovate your house and every farm building into one of four styles.
 | | |
 |---|---|
 | **World** | A 64×64-tile valley of woods, lakes, marsh, quarries and a river in 64 buyable plots, a valley map, a town, a mine and a beach |
+| **Places to visit** | The Old Woods off Main Street; the Granite Quarry, the High Pasture and the weekend Crossroads Market by minecart; Shell Island by rowing boat. Each has something new every morning |
 | **Farming** | 14 crops in Common, Rare and Legendary, 4 fruit trees, quality stars, fertilizer, sprinklers, giant pumpkins |
-| **Animals** | Cows, hens and sheep with names and happiness, rare and golden breeds, barn and coop interiors, breeding, a horse to ride, and Buddy the dog |
+| **Animals** | Cows, hens, sheep, goats, ducks and pigs, up to 36 of them, in four breeds. Each has a size and a temperament, and one birth in 64 sparkles. Pair them to breed, raise the babies well and they grow up big, sell the ones you don't keep, and fill the Herd Book. Plus a horse to ride and Buddy the dog |
+| **Year 3 and on** | An endless Town Fund, seasonal contracts that grow each year, Grandpa's review every spring, the Library's 73-piece collection, a daily surprise, letters and yearly wishes from friends, a fifth heart |
 | **Building** | 9 farm buildings, 30+ decorations, 4 fence and 4 path styles, ponds and bridges, move and remove |
 | **Design tools** | Paint lines by walking, an eraser, undo, farm-wide colour swatches, and blueprints you copy and stamp |
 | **Styles** | Classic, Modern, Log Cabin and Storybook Cottage, for the house, every farm building and every storefront |
@@ -305,7 +312,7 @@ Renovate your house and every farm building into one of four styles.
 | **Fishing** | Ponds, rivers, the fountain and the ocean, with fish that depend on the water, season and time of day |
 | **Goals** | Milestones with letters from Grandpa, a year-end review and a collection log |
 | **Sound** | Original chiptune songs and jingles on a custom 4-channel driver, plus sound effects |
-| **Saves** | Two battery-backed save slots, with an autosave every morning |
+| **Saves** | One battery-backed save (fits a 32 KB ModRetro cartridge), with an autosave every morning |
 
 <br>
 

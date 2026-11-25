@@ -1,4 +1,4 @@
-// Stilwell Farms -- the horse: bought at Rosa's once you have a stable, named, brushed and ridden (banked)
+// Stilwell Farms -- the horse: bought at Alyssa's once you have a stable, named, brushed and ridden (banked)
 //
 // The horse waits by the stable (actors.c spawns it on the farm). A on it: Ride, Brush, or a look at it.
 // Riding moves twice as fast as walking; A or B steps you back down beside it, anywhere. Leaving the farm
@@ -57,7 +57,7 @@ void horse_shop(void) BANKED {
 
 // ---------------------------------------------------------------- on the farm
 void stable_act(void) BANKED {
-    if (!G.horse) { say("A fine stable, ready for a horse. Rosa at the General Store can find you one!"); return; }
+    if (!G.horse) { say("A fine stable, ready for a horse. Alyssa at Seeds & Needs can find you one!"); return; }
     s_clr(); s_add(G.horse_name); s_add("'s stable. Fresh straw, a full water bucket and a brass name plate.");
     say(sbuf);
 }

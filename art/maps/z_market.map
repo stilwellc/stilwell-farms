@@ -1,0 +1,28 @@
+# The Crossroads Market: by minecart, where the valley road meets the highway. Three traders' tents, open at the
+# weekend (areas.c): seeds for any season, feed by the cartload, and Highland stock you can't buy in town.
+map MARKET set=TOWN w=16 h=12 music=TOWN
+key # FOREST block
+key . GRASS walk
+key c COBBLE walk
+key * WILDFLOWER walk
+key L LAMP block
+key y HAY_BALE block
+key x MINE_CRATE block
+grid
+################
+#..............#
+#..............#
+#..............#
+#cccccccccccccc#
+#cLccccyccccLcc#
+#cccccccccccccc#
+#.x..........y.#
+#.xx....*....y.#
+#......cc......#
+#......cc......#
+#######cc#######
+place MARKET_TENT 2 2
+place MARKET_TENT 6 2
+place MARKET_TENT 10 2
+warp 7 11 MINE 11 6 up
+warp 8 11 MINE 11 6 up

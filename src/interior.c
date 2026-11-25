@@ -124,7 +124,7 @@ static const char *const tips[10] = {
     "Farm tip: walk up to a For Sale sign at the edge of your land to buy more of it.",
     "Farm tip: say hello to the townsfolk every day, and bring gifts, to make friends.",
     "Farm tip: sprinklers water the soil around them every morning. No more watering cans!",
-    "Farm tip: upgraded tools from the blacksmith work on more ground with each swing."};
+    "Farm tip: upgraded tools from the Grumpy Anvil work on more ground with each swing."};
 
 static void go_to_bed(uint8_t k) {
     uint8_t bx = G.furn[k][1], by = G.furn[k][2], sc = scene, i;
@@ -170,6 +170,7 @@ void interior_act(void) BANKED {
         s_clr(); s_add("And now the weather. Tomorrow: "); s_add(fc[G.tomorrow & 3]); s_ch('!');
         say(sbuf);
         ui_speaker = 0;
+        daily_tv();
         if (!cook_tv()) { set_speaker("TV"); say(tips[(uint8_t)(G.day + G.season * 7 + G.year) % 10]); ui_speaker = 0; }
         break;
     }

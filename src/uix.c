@@ -55,7 +55,7 @@ uint8_t ui_name(const char *prompt, char *buf, uint8_t maxlen) BANKED {
 
 static uint8_t pick_ok(uint8_t filter, uint8_t it) {
     if (filter == PICK_PRODUCE) return it <= I_CHERRY;
-    if (filter == PICK_MILK) return it == I_MILK;
+    if (filter == PICK_MILK) return it == I_MILK || it == I_GOATMILK;
     return 1;
 }
 

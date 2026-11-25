@@ -98,10 +98,8 @@ static void work(void) {
             Animal *a = &G.anim[k];
             if (a->kind == 0xFF) continue;
             if (a->flags & AF_READY) {
-                uint8_t it = a->kind == A_COW ? I_MILK : a->kind == A_HEN ? I_EGG : I_WOOL;
-                uint8_t q = BREED(a) == R_LEGEND ? 2 : a->happy > 200 ? 2 : a->happy > 120 ? 1 : 0;
-                ship(it, q);
-                if (BREED(a)) ship(it, q);   // rare and golden breeds give two
+                uint8_t it = anim_item(k), yv = anim_yield(k), q = yv >> 4;
+                for (yv &= 15; yv; yv--) ship(it, q);   // animals.c: breed, size and sparkle decide how many
                 a->flags &= ~AF_READY;
                 m_collected++;
             }
@@ -358,13 +356,13 @@ static void hire_menu(void) {
     }
 }
 
-// Hollis's counter: on a festival day FESTIVAL leads the list (festival.c); VALLEY is the restoration board (valley.c),
+// Joe's counter: on a festival day FESTIVAL leads the list (festival.c); VALLEY is the restoration board (valley.c),
 // INVEST the town investments (invest.c)
 static const char *const hall_items[7] = {"FESTIVAL", "TALK", "VALLEY", "HIRE HELP", "STAFF", "INVEST", "BYE"};
 
 void staff_hall(void) BANKED {
     uint8_t r, f = FESTIVAL_DAY();
-    set_speaker("Hollis");
+    set_speaker("Joe");
     say(f ? "Happy festival day! The games are on out front." : "Need a hand on the farm? Folks in town want work.");
     ui_speaker = 0;
     while (1) {
@@ -402,7 +400,7 @@ void staff_page(void) BANKED {
         ui_title(2, 0, sbuf);
         if (!n) {
             ui_text(2, 2, "Nobody yet.");
-            ui_text(2, 4, "Ask Mayor Hollis");   // 17 columns inside the box
+            ui_text(2, 4, "Ask Mayor Joe");   // 17 columns inside the box
             ui_text(2, 5, "at the town hall");
             ui_text(2, 6, "to find you");
             ui_text(2, 7, "farmhands.");

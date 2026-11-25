@@ -27,6 +27,8 @@ static const uint8_t lot_x[NUM_LOTS] = {2, 7, 20, 26};
 static const uint16_t biz_price[NUM_BIZ_ALL] = {10000, 16000, 25000, 35000, 45000, 50000, 60000, 65000};
 static const char *const biz_name[NUM_BIZ_ALL] = {"Bakery", "Juice Bar", "Creamery", "Florist",
                                                   "Brewery", "Winery", "Restaurant", "Inn"};
+static const char *const biz_sign[NUM_BIZ_ALL] = {"Rise & Pie", "Main Squeeze", "Udder Delight", "Petal Pushers",
+                                                  "Hoppy Days", "Grape Escape", "Thyme & Again", "Snooze Inn"};   // the name over the door, 13 columns
 static const char *const prem_name[NUM_BIZ_ALL] = {"pies", "smoothies", "ice creams", "bouquets",
                                                    "craft ales", "reserve wines", "chef's specials", "breakfasts"};
 static const char *const basic_name[NUM_BIZ_ALL] = {"tarts", "juices", "cheeses", "posies",
@@ -241,7 +243,7 @@ static uint8_t pantry_total(uint8_t b) {
 }
 
 void biz_overnight(void) BANKED {
-    uint8_t b, P = prosperity(), inn = OWNED(BIZ_INN) && !BUILDING(BIZ_INN), bit;
+    uint8_t b, P = prosperity(), inn = OWNED(BIZ_INN) && !BUILDING(BIZ_INN), bit, fund = fund_pct();
     uint32_t v;
     uint16_t mult;
     m_guests = m_quit = m_opened = m_empty = 0;
@@ -264,7 +266,7 @@ void biz_overnight(void) BANKED {
             v += (uint16_t)m_guests * INN_RATE;
         }
         if (!v && !pantry_total(b)) m_empty |= bit;
-        mult = 100 + BIZ_PCT_TIER * tier(b) + BIZ_PCT_PROSP * P + (staffed(b) ? BIZ_PCT_MGR : 0) + (inn && b != BIZ_INN ? BIZ_PCT_INN : 0);
+        mult = 100 + BIZ_PCT_TIER * tier(b) + BIZ_PCT_PROSP * P + (staffed(b) ? BIZ_PCT_MGR : 0) + (inn && b != BIZ_INN ? BIZ_PCT_INN : 0) + fund;
         v = v * mult / 100;
         if (v > 65535) v = 65535;
         *todayp(b) = (uint16_t)v;
@@ -275,11 +277,12 @@ void biz_overnight(void) BANKED {
     }
 }
 
-static void add_names(uint8_t bits) {
+static void add_list(uint8_t bits, const char *const *names) {
     uint8_t b, n = 0;
     for (b = 0; b < NUM_BIZ_ALL; b++)
-        if (bits & (1 << b)) { if (n++) s_add(", "); s_add(biz_name[b]); }
+        if (bits & (1 << b)) { if (n++) s_add(", "); s_add(names[b]); }
 }
+#define add_names(bits) add_list(bits, biz_name)
 
 void biz_report(void) BANKED {
     uint8_t b, n = 0, one = 0, top = 0xFF;
@@ -292,7 +295,7 @@ void biz_report(void) BANKED {
     }
     if (n == 1 && total) {   // one business: what it sold
         b = one;
-        s_clr(); s_add("Your "); s_add(biz_name[b]); s_add(" sold ");
+        s_clr(); s_add(biz_sign[b]); s_add(" sold ");
         if (m_prem[b]) { s_num(m_prem[b], 0); s_ch(' '); s_add(prem_name[b]); }
         if (m_prem[b] && m_basic[b]) s_add(" and ");
         if (m_basic[b]) { s_num(m_basic[b], 0); s_ch(' '); s_add(basic_name[b]); }
@@ -301,7 +304,7 @@ void biz_report(void) BANKED {
         say(sbuf);
     } else if (total) {      // several: one line for the lot
         s_clr(); s_add("Your "); s_num(n, 0); s_add(" businesses earned G"); s_num(total, 0); s_add(" overnight! Best: ");
-        s_add(biz_name[top]); s_add(" G"); s_num(*todayp(top), 0); s_ch('.');
+        s_add(biz_sign[top]); s_add(" G"); s_num(*todayp(top), 0); s_ch('.');
         say(sbuf);
     }
     if (m_empty) {
@@ -312,7 +315,7 @@ void biz_report(void) BANKED {
     if (m_wages) { s_clr(); s_add("Paid G"); s_num(m_wages, 0); s_add(" to your shop managers."); say(sbuf); }
     if (m_quit) { s_clr(); s_add("No gold for wages: the manager quit at your "); add_names(m_quit); s_ch('.'); say(sbuf); }
     if (m_opened) {
-        s_clr(); s_add("Grand opening! Your "); add_names(m_opened); s_add(" on Market Street is open for business.");
+        s_clr(); s_add("Grand opening on Market St: "); add_list(m_opened, biz_sign); s_ch('!');
         say(sbuf);
     }
 }
@@ -382,10 +385,10 @@ static void stock(uint8_t b) {
 static void status(uint8_t b) {
     uint8_t k, y = 8, x, lv = *lvp(b), *p = pan(b), P = prosperity();
     uint16_t bonus = BIZ_PCT_TIER * tier(b) + BIZ_PCT_PROSP * P + (staffed(b) ? BIZ_PCT_MGR : 0) +
-                     (OWNED(BIZ_INN) && !BUILDING(BIZ_INN) && b != BIZ_INN ? BIZ_PCT_INN : 0);
+                     (OWNED(BIZ_INN) && !BUILDING(BIZ_INN) && b != BIZ_INN ? BIZ_PCT_INN : 0) + fund_pct();
     ui_begin();
     ui_box(0, 0, 20, 17);
-    s_clr(); s_add(biz_name[b]); s_add("  Level "); s_num(lv + 1, 0);
+    s_clr(); s_add(biz_sign[b]); s_add(" Lv"); s_num(lv + 1, 0);
     ui_text(1, 1, sbuf);
     s_clr(); s_add(style_name[G.biz_look[b] & BL_STYLE]); s_add(" * facade "); s_num(tier(b), 0);
     ui_text(1, 2, sbuf);
@@ -490,14 +493,14 @@ static void facade_menu(uint8_t b) {
         if (r == 0) {
             r = pick_style(b, look, 0);
             if (r == 0xFF || r == (look & BL_STYLE)) continue;
-            s_clr(); s_add("Renovate the "); s_add(biz_name[b]); s_add(" in "); s_add(style_name[r]); s_add(" style for G");
+            s_clr(); s_add("Renovate "); s_add(biz_sign[b]); s_add(" in "); s_add(style_name[r]); s_add(" style for G");
             s_num(STYLE_PRICE, 0); s_ch('?');
             if (ui_yesno(sbuf) && pay(STYLE_PRICE, 0, 0)) {
                 G.biz_look[b] = (look & ~BL_STYLE) | r;
                 G.invested += STYLE_PRICE;
                 redraw_biz(b);
                 music_play(MUS_JINGLE_FANFARE);
-                say("June's crew had it done by lunch. Looks wonderful!");
+                say("Andy's crew had it done by lunch. Looks wonderful!");
                 music_for_scene();
                 hud_draw();
             }
@@ -528,7 +531,7 @@ static void facade_menu(uint8_t b) {
 static void staff_menu(uint8_t b) {
     uint16_t w = MGR_WAGE(*lvp(b));
     if (staffed(b)) {
-        s_clr(); s_add(mgr_name[b]); s_add(" runs the "); s_add(biz_name[b]); s_add(" for G"); s_num(w, 0);
+        s_clr(); s_add(mgr_name[b]); s_add(" runs "); s_add(biz_sign[b]); s_add(" for G"); s_num(w, 0);
         s_add(" a night. Let them go?");
         if (ui_yesno(sbuf)) {
             G.biz_staffed &= ~(1 << b);
@@ -559,7 +562,7 @@ static void buy(uint8_t b) {
     music_play(MUS_JINGLE_BUY);
     redraw_biz(b);
     hud_draw();
-    s_clr(); s_add("The "); s_add(biz_name[b]); s_add(" is yours! Stock its pantry and it sells every night.");
+    s_clr(); s_add("It's yours! Up goes the sign: "); s_add(biz_sign[b]); s_add(". Stock the pantry and it sells nightly.");
     say(sbuf);
     music_for_scene();
     goals_check();
@@ -605,7 +608,7 @@ void biz_build(uint8_t lot) BANKED {
     music_play(MUS_JINGLE_BUY);
     redraw_biz(k);
     hud_draw();
-    s_clr(); s_add("The builders start tonight. Your "); s_add(biz_name[k]); s_add(" opens tomorrow morning!");
+    s_clr(); s_add("The builders start tonight. "); s_add(biz_sign[k]); s_add(" opens tomorrow morning!");
     say(sbuf);
     music_for_scene();
     goals_check();
@@ -619,7 +622,7 @@ void biz_act(uint8_t b) BANKED {
     if (BUILDING(b)) { say("Builders are hard at work behind the scaffolding. It opens tomorrow morning!"); return; }
     while (1) {
         ui_begin(); ui_money();
-        s_clr(); s_add(biz_name[b]);
+        s_clr(); s_add(biz_sign[b]);
         ui_text(1, 14, sbuf);
         r = ui_menu(0, 0, 11, bm, 6, 0);
         ui_end();

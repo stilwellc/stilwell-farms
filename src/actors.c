@@ -154,7 +154,7 @@ void actors_spawn(void) BANKED {
     riding = 0;   // any scene change dismounts; the horse goes back to its stable
     for (k = 0; k < MAX_ACT; k++) act_kind[k] = K_NONE;
     emo_kind = 0;
-    k = (scene == MAP_TOWN || scene == MAP_BEACH) ? SPRSET_TOWN : SPRSET_FARM;   // the LCD is off here: swap the sprite set (Milo visits the beach)
+    k = (scene == MAP_TOWN || IS_SHORE(scene) || scene == MAP_MARKET) ? SPRSET_TOWN : SPRSET_FARM;   // the LCD is off here: swap the sprite set (Marcy visits the beach)
     if (k != spr_set) { spr_set = k; spr_set_load(k); }
     if (IS_BARNIN(scene)) { spawn_inside(); return; }
     if (scene == SCENE_FARM) {
@@ -180,7 +180,7 @@ void actors_spawn(void) BANKED {
             }
     }
     if (fest_on) fest_on = 0;   // left town mid egg hunt: the game is called off
-    if (scene == MAP_BEACH) { if (milo_beach()) add(K_NPC, NPC_MILO, 12, 8); return; }   // Milo by the pier
+    if (scene == MAP_BEACH) { if (milo_beach()) add(K_NPC, NPC_MILO, 12, 8); return; }   // Marcy by the pier
     if (scene == MAP_TOWN) {
         // townsfolk start wherever their schedule has them right now (home = indoors)
         sched_t = G.time; greeted = 0; arrive = 1; resched_n = NUM_NPC;
@@ -320,15 +320,16 @@ static uint8_t tile_for(uint8_t k, uint8_t *flip, uint8_t *pal) {
         return d <= D_UP ? SPR_DOG_DOWN : SPR_DOG_SIDE;
     default: {
         Animal *a = &G.anim[act_id[k]];
-        uint8_t kd = a->kind % 3, br = BREED(a);
-        static const uint8_t breed_pal[NUM_RARITY] = {SPAL_ANIMAL, SPAL_BREEDRARE, SPAL_BREEDGOLD};
-        static const uint8_t front[3] = {SPR_COW, SPR_CHICKEN, SPR_SHEEP};
-        static const uint8_t front_bank[3] = {SPR_COW_PAL & 8, SPR_CHICKEN_PAL & 8, SPR_SHEEP_PAL & 8};
-        static const uint8_t side[3][2] = {{SPR_COW_SIDE, SPR_COW_SIDE2}, {SPR_HEN_SIDE, SPR_HEN_SIDE2}, {SPR_SHEEP_SIDE, SPR_SHEEP_SIDE2}};
-        static const uint8_t side_bank[3] = {SPR_COW_SIDE_PAL & 8, SPR_HEN_SIDE_PAL & 8, SPR_SHEEP_SIDE_PAL & 8};
+        uint8_t kd = a->kind % NUM_KINDS, br = BREED(a);
+        static const uint8_t breed_pal[4] = {SPAL_ANIMAL, SPAL_BREEDRARE, SPAL_BREEDGOLD, SPAL_BREEDRARE};   // 3 = Highland
+        static const uint8_t front[NUM_KINDS] = {SPR_COW, SPR_CHICKEN, SPR_SHEEP, SPR_GOAT, SPR_DUCK, SPR_PIG};
+        static const uint8_t front_bank[NUM_KINDS] = {SPR_COW_PAL & 8, SPR_CHICKEN_PAL & 8, SPR_SHEEP_PAL & 8, SPR_GOAT_PAL & 8, SPR_DUCK_PAL & 8, SPR_PIG_PAL & 8};
+        static const uint8_t side[NUM_KINDS][2] = {{SPR_COW_SIDE, SPR_COW_SIDE2}, {SPR_HEN_SIDE, SPR_HEN_SIDE2}, {SPR_SHEEP_SIDE, SPR_SHEEP_SIDE2},
+                                                   {SPR_GOAT_SIDE, SPR_GOAT_SIDE2}, {SPR_DUCK_SIDE, SPR_DUCK_SIDE2}, {SPR_PIG_SIDE, SPR_PIG_SIDE2}};
+        static const uint8_t side_bank[NUM_KINDS] = {SPR_COW_SIDE_PAL & 8, SPR_HEN_SIDE_PAL & 8, SPR_SHEEP_SIDE_PAL & 8, SPR_GOAT_SIDE_PAL & 8, SPR_DUCK_SIDE_PAL & 8, SPR_PIG_SIDE_PAL & 8};
         // rarity: breed picks the palette; each sprite keeps its own VRAM bank bit
-        if (d <= D_UP) { *flip = 0; *pal = front_bank[kd] | breed_pal[br % NUM_RARITY]; return front[kd]; }
-        *pal = side_bank[kd] | breed_pal[br % NUM_RARITY];
+        if (d <= D_UP) { *flip = 0; *pal = front_bank[kd] | breed_pal[br & 3]; return front[kd]; }
+        *pal = side_bank[kd] | breed_pal[br & 3];
         return side[kd][walk ? 1 : 0];
     }
     }

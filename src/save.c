@@ -1,10 +1,13 @@
-// Stilwell Farms -- battery saves: two slots, the farm world in cart SRAM, older saves carried forward (banked)
+// Stilwell Farms -- battery saves: one slot, the farm world in cart SRAM, older saves carried forward (banked)
 //
-// SRAM map (MBC5, 8 banks of 8KB at 0xA000):
-//   bank 0      slot headers: slot 0's GameState at 0xA000, slot 1's at 0xB000 (where v2..v4 saves were)
+// SRAM map (MBC5, 4 banks of 8KB at 0xA000 = 32KB, all a ModRetro cartridge has. The first releases declared
+// 128KB and used banks 0..6; on a 32KB cartridge banks 4..6 wrap onto 0..2, so a save overwrote its own
+// header and never loaded again):
+//   bank 0      the save's GameState at 0xA000 (under 4KB), the saved world's a2[4096] at 0xB000
 //   bank 1      live world cell[4096] at 0xA000, a1[4096] at 0xB000  (WB_LIVE: mapped during play)
-//   bank 2      live world a2[4096] at 0xA000                         (WB_A2)
-//   banks 3, 4  slot 0's saved world, same layout;  banks 5, 6  slot 1's
+//   bank 2      live world a2[4096] at 0xA000                         (WB_A2); 0xB000 is free
+//   bank 3      the saved world's cell[4096] at 0xA000, a1[4096] at 0xB000  (WB_SAVED)
+// Live world + one saved world + the state = 28KB, so there is room for exactly one save.
 // RAM stays enabled with WB_LIVE mapped; everything here that maps another bank puts WB_LIVE back.
 #pragma bank 255
 #include <gb/gb.h>
@@ -16,8 +19,9 @@ BANKREF(save_write)
 
 uint8_t save_slot;
 uint8_t save_info[3];   // season, day, year of the slot save_valid() looked at last (title screen)
-#define SLOT(s) ((uint8_t *)(0xA000 + ((uint16_t)(s) << 12)))
-#define SLOT_WB(s) (3 + ((s) << 1))
+#define SLOT(s) ((uint8_t *)0xA000)
+#define WB_SAVED 3
+typedef char gamestate_fits_4k[(sizeof(GameState) <= 0x1000) ? 1 : -1];   // the saved a2 starts at 0xB000
 
 // s = rotl1(s) + byte over the whole state. SDCC's C loop spent ~40 cycles a byte; this is 16.
 // sdcccall(1): p in DE, n in BC, result in BC.
@@ -174,22 +178,28 @@ static void page_sum(const uint8_t *p) __naked {
     __endasm;
 }
 
-// A world = bank b: cell + a1 (0xA000..0xBFFF), bank b+1: a2 (0xA000..0xAFFF).
+// A world w (WB_LIVE or WB_SAVED) = bank w: cell + a1 (0xA000..0xBFFF), plus a2: the live one in bank WB_A2
+// at 0xA000, the saved one in bank 0 at 0xB000.
 // world_xfer copies world src over world dst; with dst 0 it only sums src. Returns the sum.
+#define A2_BANK(w) ((w) == WB_LIVE ? WB_A2 : 0)
+#define A2_BASE(w) ((w) == WB_LIVE ? 0xA000 : 0xB000)
 static uint16_t world_xfer(uint8_t dst, uint8_t src) {
     uint8_t buf[256];
-    uint16_t a, end;
-    uint8_t part;
+    uint16_t a, sa = A2_BASE(src), da = A2_BASE(dst);
     wsum = 0;
-    for (part = 0; part < 2; part++) {
-        end = part ? 0xB000 : 0xC000;
-        for (a = 0xA000; a != end; a += 256) {
-            SWITCH_RAM(src + part);
-            if (!dst) { page_sum((const uint8_t *)a); continue; }
-            page_in(buf, (const uint8_t *)a);
-            SWITCH_RAM(dst + part);
-            page_out((uint8_t *)a, buf);
-        }
+    for (a = 0xA000; a != 0xC000; a += 256) {
+        SWITCH_RAM(src);
+        if (!dst) { page_sum((const uint8_t *)a); continue; }
+        page_in(buf, (const uint8_t *)a);
+        SWITCH_RAM(dst);
+        page_out((uint8_t *)a, buf);
+    }
+    for (a = 0; a != 0x1000; a += 256) {
+        SWITCH_RAM(A2_BANK(src));
+        if (!dst) { page_sum((const uint8_t *)(sa + a)); continue; }
+        page_in(buf, (const uint8_t *)(sa + a));
+        SWITCH_RAM(A2_BANK(dst));
+        page_out((uint8_t *)(da + a), buf);
     }
     SWITCH_RAM(WB_LIVE);
     return wsum;
@@ -202,7 +212,7 @@ void save_write(void) BANKED {
     G.version = SAVE_VERSION;
     SWITCH_RAM(0);
     hdr[0] = 0;   // the slot reads as empty while its world is half copied (a torn save is never a mix)
-    G.world_sum = world_xfer(SLOT_WB(save_slot), WB_LIVE);
+    G.world_sum = world_xfer(WB_SAVED, WB_LIVE);
     G.checksum = sum((const uint8_t *)&G, sizeof(G) - 2);
     SWITCH_RAM(0);
     memcpy(hdr, &G, sizeof(G));
@@ -241,17 +251,72 @@ static uint8_t old_ok(const uint8_t *p, uint8_t v, uint16_t n) {
     return p[2] == v && (p[n - 2] | (p[n - 1] << 8)) == sum(p, n - 2);
 }
 
-// 0 none, 2 old v2 farm, 3 / 4 a v3 / v4 save (carried forward on load), 5 current. Leaves bank 0 mapped.
+// v5 and v6 had today's fields in today's order, but 70 items (inv 9 bytes shorter; shipped and donated a byte
+// shorter each) and 11-byte animals. v5 ends at the field before anim (its 12 animals sit in anim_v5); v6 goes on
+// with 36 animals and the late-game block. Both load in runs around the arrays that grew.
+#define O_ITEMS 70
+#define O_BITS ((O_ITEMS + 7) / 8)
+#define O_A (offsetof(GameState, inv) + O_ITEMS * 3)                                   // run A: magic .. inv
+#define O_LB (offsetof(GameState, shipped) - offsetof(GameState, seeds) + O_BITS)      // run B: seeds .. shipped
+#define O_LC (offsetof(GameState, anim) - offsetof(GameState, goals))                  // run C: goals .. before anim
+#define O_ANIMS (O_A + O_LB + O_LC)
+#define V5_SIZE (O_ANIMS + 2)
+#define V6_ANIMALS 36
+#define O_LD1 (offsetof(GameState, donated) - offsetof(GameState, review_year) + O_BITS)   // review_year .. donated
+#define O_LD2 (offsetof(GameState, checksum) - offsetof(GameState, museum_sets))           // museum_sets .. spare
+#define V6_SIZE (O_ANIMS + V6_ANIMALS * OLD_ANIMAL + O_LD1 + O_LD2 + 2)
+#define O_WSUM (O_A + O_LB + offsetof(GameState, world_sum) - offsetof(GameState, goals))
+
+// n old 11-byte animals into the list the game uses now; the rest of the list is empty
+static void anims_in(const uint8_t *q, uint8_t n) {
+    uint8_t k;
+    memset(G.anim, 0, sizeof(G.anim));
+    for (k = 0; k < MAX_ANIMALS; k++) {
+        if (k < n) memcpy(&G.anim[k], q + (uint16_t)k * OLD_ANIMAL, OLD_ANIMAL);
+        else G.anim[k].kind = 0xFF;
+    }
+}
+
+// saves older than v6 keep their animals in anim_v5, and know nothing of the years after the valley
+static void anim_carry(void) {
+    anims_in(G.anim_v5, V5_ANIMALS);
+    memset(&G.review_year, 0, offsetof(GameState, checksum) - offsetof(GameState, review_year));
+    if (G.goals & (1UL << 31)) G.review_year = G.year;   // this year's review was already read
+}
+
+static void migrate_56(const uint8_t *p, uint8_t v) {
+    memset(&G, 0, sizeof(G));
+    memcpy(&G, p, O_A);
+    memcpy(G.seeds, p + O_A, O_LB);
+    memcpy(&G.goals, p + O_A + O_LB, O_LC);
+    if (v == 5) anim_carry();
+    else {
+        const uint8_t *q = p + O_ANIMS + V6_ANIMALS * OLD_ANIMAL;
+        anims_in(p + O_ANIMS, V6_ANIMALS);
+        memcpy(&G.review_year, q, O_LD1);
+        memcpy(&G.museum_sets, q + O_LD1, O_LD2);
+        G.herd[0] = G.herd[1] = G.herd[2] = G.herd[3] = G.herd_done = 0;   // (were spare, and zero; be sure)
+    }
+}
+
+// 0 none, 2 old v2 farm, 3 .. 6 a v3 .. v6 save (carried forward on load), 7 current. Leaves bank 0 mapped.
 static uint8_t check(uint8_t slot) {
     const uint8_t *p = SLOT(slot);
     const GameState *s = (const GameState *)p;
     SWITCH_RAM(0);
-    if (s->magic != SAVE_MAGIC) return 0;
+    if (slot || s->magic != SAVE_MAGIC) return 0;   // one slot
     if (s->version == SAVE_VERSION && s->checksum == sum(p, sizeof(GameState) - 2)) {
         uint16_t ws = s->world_sum;
-        ws = world_xfer(0, SLOT_WB(slot)) == ws;
+        ws = world_xfer(0, WB_SAVED) == ws;
         SWITCH_RAM(0);
-        return ws ? 5 : 0;
+        return ws ? 7 : 0;
+    }
+    if (old_ok(p, 6, V6_SIZE) || old_ok(p, 5, V5_SIZE)) {
+        uint16_t ws = p[O_WSUM] | (p[O_WSUM + 1] << 8);
+        uint8_t v = p[2];
+        ws = world_xfer(0, WB_SAVED) == ws;
+        SWITCH_RAM(0);
+        return ws ? v : 0;
     }
     if (old_ok(p, 4, V4_SIZE)) return 4;
     if (old_ok(p, 3, V3_SIZE)) return 3;
@@ -262,7 +327,7 @@ static uint8_t check(uint8_t slot) {
 uint8_t save_valid(uint8_t slot) BANKED {
     uint8_t v = check(slot);
     const uint8_t *p = SLOT(slot);
-    if (v == 5) { save_info[0] = p[offsetof(GameState, season)]; save_info[1] = p[offsetof(GameState, day)]; save_info[2] = p[offsetof(GameState, year)]; }
+    if (v >= 5) { save_info[0] = p[offsetof(GameState, season)]; save_info[1] = p[offsetof(GameState, day)]; save_info[2] = p[offsetof(GameState, year)]; }
     else if (v >= 3) { save_info[0] = p[OLD(season)]; save_info[1] = p[OLD(day)]; save_info[2] = p[OLD(year)]; }
     SWITCH_RAM(WB_LIVE);
     return v;
@@ -314,6 +379,7 @@ static void migrate_old(const uint8_t *p, uint8_t v) {
     world_new();
     SWITCH_RAM(0);
     memcpy(&G.bld, p + V4_BLD, RUN_A);
+    anim_carry();
     if (v == 4) {
         const uint8_t *q = p + V4_BLD + RUN_A;
         memcpy(G.inv, q, V4_INV); q += V4_INV;
@@ -355,13 +421,18 @@ static void migrate_old(const uint8_t *p, uint8_t v) {
 
 uint8_t save_load(uint8_t slot) BANKED {
     uint8_t v = check(slot);
-    if (v == 5) {
+    if (v == 7) {
         memcpy(&G, SLOT(slot), sizeof(G));
-        world_xfer(WB_LIVE, SLOT_WB(slot));
+        world_xfer(WB_LIVE, WB_SAVED);
+    } else if (v >= 5) {
+        migrate_56(SLOT(slot), v);
+        G.version = SAVE_VERSION;
+        world_xfer(WB_LIVE, WB_SAVED);
     } else if (v == 4 || v == 3) migrate_old(SLOT(slot), v);
     else if (v == 2) migrate_v2(SLOT(slot));
     SWITCH_RAM(WB_LIVE);
-    save_slot = slot;
+    save_slot = 0;
     if (v == 2) G.scene = SCENE_FARM;
+    if (v) herd_all();   // the Herd Book knows whoever is in the barns
     return v != 0;
 }

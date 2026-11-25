@@ -21,6 +21,7 @@ const ItemDef items[NUM_ITEMS] = {
     {"Salad", 210}, {"Omelet", 230}, {"Fish Fry", 150}, {"Fish Stew", 240}, {"Chowder", 350},
     {"Pump.Soup", 430}, {"Berry Pie", 180}, {"Apple Pie", 320}, {"Casserole", 440}, {"Risotto", 260},
     {"Veg Stew", 250}, {"Sorbet", 590}, {"Muffin", 170}, {"Cobbler", 340}, {"Stir-Fry", 320}, {"Feast", 1250},
+    {"Goat Milk", 110}, {"Duck Egg", 60}, {"Truffle", 420},
 };
 
 // bank 0: callers pass their own string literals
@@ -65,5 +66,6 @@ const uint8_t item_icon_tile[NUM_ITEMS] = {
     // dishes: bowls, pies, and plates that reuse the closest ingredient icon
     GL_IT_BOWL, GL_IT_EGG, GL_IT_FISH, GL_IT_BOWL, GL_IT_BOWL, GL_IT_BOWL, GL_IT_PIE, GL_IT_PIE,
     GL_IT_CHEESE, GL_IT_BOWL, GL_IT_BOWL, GL_IT_MELON, GL_IT_PIE, GL_IT_PIE, GL_IT_FORAGE, GL_IT_STAR2,
+    GL_IT_MILK, GL_IT_EGG, GL_IT_FORAGE,   // goat milk, duck egg, truffle
 };
 

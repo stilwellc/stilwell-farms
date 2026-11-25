@@ -1,0 +1,52 @@
+# The Old Woods: east out of town along Main Street. Pines and birch round a lily pond; berries, mushrooms
+# and herbs come up fresh each morning on a few spots (areas.c: woods), catfish and koi rise in the pond, and
+# the hollow log by the south path holds something different every day. Nothing is built here: a place to visit.
+map WOODS set=FARM w=24 h=18 music=SPRING
+key # FOREST block
+key P PINE block
+key B BIRCH block
+key b BUSH block
+key . GRASS walk
+key , GRASS2 walk
+key = DIRT walk
+key L LILYPAD water
+key r ROCK block
+key s STUMP block
+key l LOG block
+key 0 WATER_0 water
+key 1 WATER_1 water
+key 2 WATER_2 water
+key 3 WATER_3 water
+key 4 WATER_4 water
+key 5 WATER_5 water
+key 6 WATER_6 water
+key 7 WATER_7 water
+key 8 WATER_8 water
+key 9 WATER_9 water
+key A WATER_10 water
+key C WATER_11 water
+key D WATER_12 water
+key E WATER_13 water
+key G WATER_14 water
+key H WATER_15 water
+grid
+########################
+#PP..B....PP.....PPP..P#
+#P....,....P..,.....B.P#
+#..,.....b........,...P#
+#.....B......6GGD.....P#
+#..b........6HHHHD....B#
+#..........6HHLHHHD...P#
+#..,.......3HHHHLH9...P#
+===========.3HHHH9....P#
+===========..3CC9...,.P#
+#....,.........r......P#
+#.B.......s........b..P#
+#......P......,.......P#
+#..,.......B.......,..P#
+#P.......,.......l....P#
+#PP...b.......P......PP#
+#PPP......PP.....B..PPP#
+########################
+warp 0 8 TOWN 30 4 left
+warp 0 9 TOWN 30 5 left

@@ -106,19 +106,8 @@ void barn_leave(Warp *w) BANKED {
 }
 
 // ---------------------------------------------------------------- caring for the animals
-static const uint8_t produce_item[3] = {I_MILK, I_EGG, I_WOOL};
-static const char *const kind_name[3] = {"cow", "hen", "sheep"};
-static const char *const breed_name[3][NUM_RARITY] = {{"Holstein", "Jersey", "Golden"}, {"White", "Brown", "Golden"},
-                                                      {"Merino", "Cocoa", "Golden"}};
-static const char *const produce_name[3] = {"Milk", "Egg", "Wool"};
-
-static uint8_t collect(Animal *a) {   // rare and golden breeds give two; golden is always gold quality
-    uint8_t br = BREED(a), n = br ? 2 : 1;
-    uint8_t q = br == R_LEGEND ? 2 : a->happy > 200 ? 2 : a->happy > 120 ? 1 : 0;
-    inv_add(produce_item[a->kind % 3], q, n);
-    a->flags &= ~AF_READY;
-    s_clr(); s_ch('+'); s_num(n, 0); s_ch(' '); s_add(items[produce_item[a->kind % 3]].name);
-    if (q) s_ch(q == 2 ? (char)0xF1 : (char)0xF0);
+static uint8_t collect(Animal *a) {   // animals.c counts breed, size and sparkle
+    uint8_t n = anim_collect((uint8_t)(a - G.anim));
     sfx(SFX_COIN);
     hud_flash(sbuf);
     player_pose(1, 24);
@@ -133,8 +122,8 @@ static void refresh_room(void) {
 static void fill_trough(void) {
     uint8_t k, fed = 0, hungry = 0;
     if (!in_occ) {
-        say(scene == MAP_COOP ? "No hens live here yet. Buy some at the General Store in town!"
-                              : "No animals live here yet. Buy cows or sheep at the General Store in town!");
+        say(scene == MAP_COOP ? "No hens live here yet. Buy some at Seeds & Needs in town!"
+                              : "No animals live here yet. Buy cows or sheep at Seeds & Needs in town!");
         return;
     }
     for (k = 0; k < 6; k++) {
@@ -210,9 +199,9 @@ void barn_act(void) BANKED {
 }
 
 // ---------------------------------------------------------------- the animal panel
-static const uint8_t front_spr[3] = {SPR_COW, SPR_CHICKEN, SPR_SHEEP};
-static const uint8_t front_bank[3] = {SPR_COW_PAL & 8, SPR_CHICKEN_PAL & 8, SPR_SHEEP_PAL & 8};
-static const uint8_t breed_pal[NUM_RARITY] = {SPAL_ANIMAL, SPAL_BREEDRARE, SPAL_BREEDGOLD};
+static const uint8_t front_spr[NUM_KINDS] = {SPR_COW, SPR_CHICKEN, SPR_SHEEP, SPR_GOAT, SPR_DUCK, SPR_PIG};
+static const uint8_t front_bank[NUM_KINDS] = {SPR_COW_PAL & 8, SPR_CHICKEN_PAL & 8, SPR_SHEEP_PAL & 8, SPR_GOAT_PAL & 8, SPR_DUCK_PAL & 8, SPR_PIG_PAL & 8};
+static const uint8_t breed_pal[4] = {SPAL_ANIMAL, SPAL_BREEDRARE, SPAL_BREEDGOLD, SPAL_BREEDRARE};
 
 static void wait_ab(void) {
     while (1) {
@@ -243,14 +232,56 @@ void portrait(uint8_t tile, uint8_t pal) BANKED {
     put16(2, 8, 11 * 8, tile, pal, 0);
 }
 
+// selling: animals.c prices it (breed, mood, size, age; a sparkle five times over). It leaves that day.
+static void sell_animal(uint8_t an) {
+    Animal *a = &G.anim[an];
+    uint16_t v = anim_worth(an);
+    s_clr(); s_add("Sell "); s_add(a->name); s_add(" for G"); s_num(v, 0); s_add("? A buyer from the market will come today.");
+    if (!ui_yesno(sbuf)) return;
+    a->kind = 0xFF;
+    G.gold += v; G.earned += v;
+    sfx(SFX_COIN);
+    hud_draw();
+    refresh_room();
+    actors_spawn();
+    say("Sold. They'll be well looked after. The stall is free for another.");
+}
+
+// SELECT on the panel: pair for breeding, sell, the Herd Book
+static void animal_menu(uint8_t an) {
+    Animal *a = &G.anim[an];
+    uint8_t r;
+    s_clr(); s_add((a->flags & AF_PAIR) ? "Unpair" : "Pair to breed"); lbl_set(0);
+    s_clr(); s_add("Sell"); lbl_set(1);
+    s_clr(); s_add("Herd Book"); lbl_set(2);
+    s_clr(); s_add("Back"); lbl_set(3);
+    ui_begin();
+    r = ui_menu(0, 0, 16, lp, 4, 0);
+    ui_end();
+    if (r == 0) {
+        if (a->flags & AF_PAIR) { a->flags &= ~AF_PAIR; hud_flash("Unpaired"); }
+        else if (a->age < ADULT_AGE) say("Too young to pair. Give it its week to grow up first.");
+        else {
+            a->flags |= AF_PAIR;
+            sfx(SFX_CONFIRM);
+            say("Paired. Pair another of its kind in this building, keep both happy, and a baby may come.");
+        }
+    } else if (r == 1) sell_animal(an);
+    else if (r == 2) herd_page();
+}
+
 void animal_panel(uint8_t an, uint8_t got) BANKED {
     Animal *a = &G.anim[an];
-    uint8_t kd = a->kind % 3, br = BREED(a) % NUM_RARITY;
+    uint8_t kd = a->kind % NUM_KINDS, br = BREED(a);
     ui_begin();
     ui_box(0, 9, 20, 8);
     ui_title(1, 9, a->name);
     portrait(front_spr[kd], front_bank[kd] | breed_pal[br]);
-    s_clr(); s_add(breed_name[kd][br]); s_ch(' '); s_add(kind_name[kd]);
+    s_clr(); s_add(a->trait & TR_SPARKLE ? "\xF1" : ""); s_add((a->trait & TR_SPARKLE) ? " " : "");
+    {   // "Jersey cow" (the SPARKLING prefix would not fit: its star stands in)
+        uint8_t keep = a->trait;
+        a->trait &= ~TR_SPARKLE; s_breed(an, 0); a->trait = keep;
+    }
     if (br) { s_ch(' '); s_ch(br == R_LEGEND ? (char)0xF1 : (char)0xF0); }
     ui_text(4, 10, sbuf);
     s_clr();
@@ -258,19 +289,29 @@ void animal_panel(uint8_t an, uint8_t got) BANKED {
     else { s_add("Age "); s_num(a->age, 0); s_add(" days"); }
     ui_text(4, 11, sbuf);
     hearts(4, 12, a->happy);
-    s_clr(); s_add("Today: ");
-    if (got) { s_ch('+'); s_num(got, 0); s_ch(' '); s_add(produce_name[kd]); s_ch('!'); }
-    else if (a->flags & AF_READY) { s_add(produce_name[kd]); s_add(" ready"); }
+    s_clr();
+    if (got) { s_add("Got +"); s_num(got, 0); s_ch(' '); s_produce(kd); s_ch('!'); }
+    else if (s_add("Today: "), 0) ;
+    else if (a->flags & AF_READY) { s_produce(kd); s_add(" ready"); }
     else if (a->age < ADULT_AGE) { s_add("grows in "); s_num(ADULT_AGE - a->age, 0); s_ch('d'); }
-    else if (kd == A_SHEEP) {
+    else if ((kd % 3) == A_SHEEP) {
         uint8_t left = WOOL_DAYS - ((a->flags & AF_WOOL) >> 3);
-        s_add("wool in "); s_num(left, 0); s_ch('d');
-    } else if (a->flags & AF_FED) { s_add(produce_name[kd]); s_add(" tmrw"); }
+        s_add("ready in "); s_num(left, 0); s_ch('d');
+    } else if (a->flags & AF_FED) { s_produce(kd); s_add(" tmrw"); }
     else s_add("hungry");
     ui_text(1, 14, sbuf);
     s_clr(); s_add("Fed: "); s_add((a->flags & AF_FED) ? "yes" : "no "); s_add("  Pet: yes");
     ui_text(1, 15, sbuf);
-    wait_ab();
+    s_clr(); s_traits(an); if (a->flags & AF_PAIR) s_add(" \xF0pair");
+    ui_text(1, 13, sbuf);
+    ui_text(10, 12, "SEL:more");
+    while (1) {
+        read_input();
+        if (joy_press & (J_A | J_B | J_SELECT)) { sfx(SFX_CURSOR); break; }
+        wait_vbl_done();
+    }
+    kd = (joy_press & J_SELECT) ? 1 : 0;
     hide16(2);
     ui_end();
+    if (kd) animal_menu(an);
 }

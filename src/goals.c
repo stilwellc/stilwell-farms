@@ -76,7 +76,9 @@ void goals_check(void) BANKED {
         }
         if (goal_met(g)) { G.goals |= bit; G.mail |= bit; }
     }
-    if (G.year >= 2 && !(G.goals & (1UL << GOAL_REVIEW))) { G.goals |= 1UL << GOAL_REVIEW; G.mail |= 1UL << GOAL_REVIEW; }
+    if (G.year >= 2 && G.review_year < G.year) {   // every spring, not only the second
+        G.review_year = G.year; G.goals |= 1UL << GOAL_REVIEW; G.mail |= 1UL << GOAL_REVIEW;
+    }
 }
 
 static void review(void) {
@@ -89,16 +91,29 @@ static void review(void) {
     for (k = 0; k < NUM_ITEMS; k++) if (is_shipped(k)) n++;
     score += n * 2;
     score += (uint16_t)(G.earned / 2000 > 100 ? 100 : G.earned / 2000);
+    score += (uint16_t)G.fund_lvl * 5 + (uint16_t)G.con_stars * 3;   // what the later years add
     set_speaker("Grandpa");
-    say("A whole year has passed. I've been watching from up here, and I'd like to tell you what I see.");
+    say(G.year > 2 ? "Another year gone by! I've been watching from up here, same as always. Here's what I see."
+                   : "A whole year has passed. I've been watching from up here, and I'd like to tell you what I see.");
     s_clr(); s_add("Your farm scores "); s_num(score, 0); s_add(" points.");
+    if (G.review_score) { s_add(" Last spring it was "); s_num(G.review_score, 0); s_ch('.'); }
     say(sbuf);
-    say(score >= 250 ? "It's the finest farm this valley has ever seen. I couldn't be prouder. Thank you." :
+    if (G.review_score && score > G.review_score) say("It keeps on growing! That's what I like to see.");
+    G.review_score = score;
+    say(score >= 400 ? "Folks will tell stories about this farm long after we're both gone. A legend, that's what it is." :
+        score >= 250 ? "It's the finest farm this valley has ever seen. I couldn't be prouder. Thank you." :
         score >= 150 ? "It's a wonderful, thriving farm. You've made the old place sing again." :
         score >= 70 ? "It's a good honest farm, and it's getting better every season." :
                       "It's a start, and every great farm starts somewhere. I believe in you.");
     say("The farm is yours to keep growing for as long as you like. Love, Grandpa.");
     ui_speaker = 0;
+    {   // a spring gift that grows with the farm and with the years
+        uint32_t gift = (uint32_t)score * 20 * (G.year > 6 ? 5 : G.year - 1);
+        G.gold += gift;
+        s_clr(); s_add("There's G"); s_num(gift, 0); s_add(" tucked in the envelope!");
+        say(sbuf);
+        hud_draw();
+    }
 }
 
 void read_mail(void) BANKED {
@@ -111,6 +126,13 @@ void read_mail(void) BANKED {
         if (g >= MAIL_VALLEY && g < MAIL_VALLEY + NUM_PROJ) {   // valley.c: a restoration letter
             music_play(MUS_JINGLE_FANFARE);
             valley_letter(g - MAIL_VALLEY);
+            music_for_scene();
+            if (G.mail) say("There's another letter in there.");
+            return;
+        }
+        if (g == MAIL_FRIEND) {                 // friends2.c: a letter from town
+            music_play(MUS_JINGLE_FANFARE);
+            friends_letter();
             music_for_scene();
             if (G.mail) say("There's another letter in there.");
             return;
@@ -133,7 +155,7 @@ void read_mail(void) BANKED {
 }
 
 // ---------------------------------------------------------------- town request board
-static const char *const npc_names[NUM_NPC] = {"Rosa", "Brick", "June", "Ada", "Hollis", "Milo"};
+static const char *const npc_names[NUM_NPC] = {"Alyssa", "Brick", "Andy", "Raza", "Joe", "Marcy"};
 
 static void new_request(void) {
     static const uint8_t pool[4][6] = {
@@ -166,6 +188,7 @@ void board_act(void) BANKED {
             hud_draw();
         }
     }
+    contracts_board();   // year 2 on: the season's bulk orders (lategame.c)
 }
 
 // ---------------------------------------------------------------- town hall: festivals and rating
@@ -175,7 +198,7 @@ static uint8_t festival_today(void) {
 }
 
 void hall_act(void) BANKED {
-    set_speaker("Hollis");
+    set_speaker("Joe");
     if (festival_today()) say("Festival day! The whole town's out by the fountain. Have you joined this year's game?");
     else {
         uint8_t plots = plots_owned(), d = G.season == SEASON_WINTER ? 25 : 14;
@@ -188,7 +211,7 @@ void hall_act(void) BANKED {
         s_add(plots >= 48 ? "A true estate!" : plots >= 32 ? "Quite the spread!" : "Room to grow!");
         say(sbuf);
     }
-    if (!(G.cook_flags & 2)) valley_board();   // valley.c: Hollis tells you about the restoration board
+    if (!(G.cook_flags & 2)) valley_board();   // valley.c: Joe tells you about the restoration board
     ui_speaker = 0;
 }
 

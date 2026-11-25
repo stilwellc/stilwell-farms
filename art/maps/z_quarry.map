@@ -1,0 +1,22 @@
+# The Granite Quarry: by minecart from the mine entrance. Open sky, bare rock. Eight seams show fresh ore each
+# morning (areas.c: hammer them), one of them a gem rock. The track home is at the south gap.
+map QUARRY set=FARM w=16 h=12 music=MINE
+key c CLIFF block
+key . GRASS walk
+key = PATH walk
+key r ROCK block
+grid
+cccccccccccccccc
+c..............c
+c..............c
+c....r.........c
+c..........r...c
+c..............c
+c.r............c
+c..............c
+c.........r....c
+c..............c
+c......==......c
+ccccccc==ccccccc
+warp 7 11 MINE 11 6 up
+warp 8 11 MINE 11 6 up

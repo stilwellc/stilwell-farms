@@ -418,17 +418,17 @@ static void breed_overnight(void) {
     for (b = 0; b < MAX_BLD && !m_baby; b++) {
         t = G.bld[b].type;
         if ((t != B_BARN && t != B_COOP) || (G.bld[b].flags & BF_RUIN)) continue;
-        for (t = A_COW; t <= A_SHEEP; t++) {
+        for (t = 0; t < NUM_KINDS; t++) {
             mom = dad = 0xFF; n = 0; free_k = 0xFF;
             for (k = 0; k < MAX_ANIMALS; k++) {
                 Animal *a = &G.anim[k];
                 if (a->kind == 0xFF) { if (free_k == 0xFF) free_k = k; continue; }
                 if (a->home != b) continue;
                 n++;
-                if (a->kind != t || a->age < ADULT_AGE || a->happy < 180) continue;
+                if (a->kind != t || a->age < ADULT_AGE || a->happy < 180 || !(a->flags & AF_PAIR)) continue;   // only pairs you chose
                 if (mom == 0xFF) mom = k; else if (dad == 0xFF) dad = k;
             }
-            if (dad == 0xFF || free_k == 0xFF || n >= (G.bld[b].type == B_COOP ? 6 : BARN_CAP) || rnd() >= 40) continue;
+            if (dad == 0xFF || free_k == 0xFF || n >= (G.bld[b].type == B_COOP ? 6 : BARN_CAP) || rnd() >= 80) continue;
             {
                 uint8_t bm = BREED(&G.anim[mom]), bd = BREED(&G.anim[dad]), r = rnd();
                 br = bm > bd ? bm : bd;
@@ -439,6 +439,7 @@ static void breed_overnight(void) {
                 Animal *c = &G.anim[free_k];
                 c->kind = t; c->home = b; c->happy = 150; c->age = 0; c->flags = br << 6;
                 strcpy(c->name, "Baby");
+                anim_born(free_k, mom, dad);   // animals.c: its temperament, and now and then a sparkle
             }
             m_baby = free_k + 1; m_mom = mom; m_dad = dad;
             break;
@@ -672,20 +673,23 @@ void world_overnight(uint8_t passed_out) BANKED {
         if (a->flags & AF_FED) {
             if (a->happy < 235) a->happy += 20;
             if (a->age < ADULT_AGE) ;   // babies just grow
-            else if (a->kind != A_SHEEP) { a->flags |= AF_READY; m_produce = 1; }
+            else if ((a->kind % 3) != A_SHEEP) { a->flags |= AF_READY; m_produce = 1; }
             else if ((a->flags & AF_WOOL) >= ((WOOL_DAYS - 1) << 3)) { a->flags = (a->flags & ~AF_WOOL) | AF_READY; m_produce = 1; }
             else if (!(a->flags & AF_READY)) a->flags += 1 << 3;   // fleece grows while fed
         }
         else if (a->happy > 30) a->happy -= 30;
         else a->happy = 0;
         if (a->flags & AF_PET) { if (a->happy < 245) a->happy += 10; }
-        a->flags &= AF_READY | AF_BREED | AF_WOOL;
+        anim_night(k);   // animals.c: temperament, and a baby's care
+        a->flags &= AF_READY | AF_BREED | AF_WOOL | AF_PAIR;
         if (a->age < 255) a->age++;
     }
     breed_overnight();
     G.pet_flags = 0;
     G.horse_day = 0;   // horse.c: brush and ride again tomorrow
     G.talked = G.gifted = 0;
+    daily_roll();      // daily.c: today's surprise
+    friends_overnight();   // friends2.c: letters for new hearts
     // farmhands: wages come out of gold first, then they water/harvest/ship/tend/weed
     staff_overnight();
     // 8. money, rest, reset
@@ -739,18 +743,17 @@ void morning_report(void) BANKED {
     if (m_produce) say("Your animals have produce waiting for you.");
     if (m_baby && G.anim[m_baby - 1].kind != 0xFF) {
         Animal *c = &G.anim[m_baby - 1];
-        static const char *const kind_w[3] = {"calf", "chick", "lamb"};
-        static const char *const breed_w[NUM_RARITY] = {"", "rare ", "GOLDEN "};
-        s_clr(); s_add(G.anim[m_mom].name); s_add(" and "); s_add(G.anim[m_dad].name); s_add(" had a ");
-        s_add(breed_w[BREED(c)]); s_add(kind_w[c->kind % 3]); s_add("! It will be grown in a week.");
+        s_clr(); s_add(G.anim[m_mom].name); s_add(" and "); s_add(G.anim[m_dad].name); s_add(" had a baby: a ");
+        s_breed(m_baby - 1, 1); s_add("! Pet it every day and it will grow up big.");
         music_play(MUS_JINGLE_FANFARE);
         say(sbuf);
         music_for_scene();
-        s_clr(); s_add("Name the "); s_add(kind_w[c->kind % 3]);   // prompt lives in sbuf: ui_name is in another bank
+        s_clr(); s_add("Name the baby");   // prompt lives in sbuf: ui_name is in another bank
         ui_name(sbuf, c->name, 5);
         m_baby = 0;
         save_write();
     }
     if (m_fruit && G.season != SEASON_WINTER) say("Fresh fruit is ripe on your fruit trees!");
+    daily_report();
     if (G.mail) say("There's a letter in your mailbox!");
 }

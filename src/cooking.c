@@ -37,7 +37,7 @@ static const DishDef dish[NUM_DISHES] = {
 // how each recipe is learned: 0 Grandpa's cards, 1 the TV show, 2 a friend, 3 the valley
 static const uint8_t source[NUM_DISHES] = {0, 0, 1, 2, 1, 2, 1, 2, 2, 1, 2, 3, 1, 2, 1, 3};
 static const uint8_t tv_dish[6] = {2, 6, 4, 9, 12, 14};   // Fish Fry, Berry Pie, Chowder, Risotto, Muffin, Stir-Fry
-static const uint8_t friend_dish[NUM_NPC] = {5, 8, 7, 13, 10, 3};   // Rosa..Milo: their own recipe
+static const uint8_t friend_dish[NUM_NPC] = {5, 8, 7, 13, 10, 3};   // Alyssa..Marcy: their own recipe
 #define NUM_FISHO 11   // cheapest first: "any fish" ingredients use up minnows and sardines before the koi
 static const uint8_t fish_order[NUM_FISHO] = {I_MINNOW, I_SARDINE, I_CARP, I_BASS, I_TROUT, I_FLOUNDER, I_CATFISH,
                                              I_SQUID, I_SNAPPER, I_TUNA, I_KOI};

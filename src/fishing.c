@@ -26,7 +26,13 @@ static uint8_t ocean_fish(uint8_t r, uint8_t tier) {
 static uint8_t pick_fish(uint8_t x, uint8_t y) {
     uint8_t p = PLOT_OF(x, y), k = plot_kind(p), r = rnd(), tier = G.tier[TT_ROD];
     if (G.buff & BUFF_LUCKY) tier += 2;         // Lucky dish
+    p = daily_fish();                           // daily.c: the fish are running
+    if (p != 0xFF) return p;
+    p = PLOT_OF(x, y);
     if (scene == MAP_BEACH) return ocean_fish(r, tier);
+    if (scene == MAP_ISLAND) return ocean_fish(r, tier + 3);   // deep water all round: the big ones come in close
+    if (scene == MAP_WOODS)                    // the lily pond: catfish after dark, and koi like nowhere else
+        return r < 24 + tier * 8 ? I_KOI : G.time >= 1080 ? I_CATFISH : (r & 1) ? I_BASS : I_CARP;
     if (G.valley_done & VD_FISH) tier++;       // the valley's streams, restored
     if (r < 3 + tier * 3) return I_KOI;
     if (k == RK_RIVER || (p & 7) == 5) return (r & 1) ? I_TROUT : I_MINNOW;      // the river runs down plot column 5

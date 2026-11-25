@@ -1,8 +1,8 @@
 // Stilwell Farms -- investing in the town: Market Street (a district south of the park, bought at the Land
-// Office: four lots for businesses you build, biz.c), community projects (Hollis's INVEST board: a tiered
+// Office: four lots for businesses you build, biz.c), community projects (Joe's INVEST board: a tiered
 // track of gold + wood + stone donations that change the town), and Town Prosperity, which every
 // business, storefront upgrade and project raises. Prosperity brings visitors: +5% business sales a level,
-// traders' goods at Rosa's (level 2), townsfolk who notice, and townsfolk who spend their evenings on
+// traders' goods at Alyssa's (level 2), townsfolk who notice, and townsfolk who spend their evenings on
 // Market Street. The Valley Restoration board (valley.c) stays separate: that one restores what was.
 // (banked)
 //
@@ -37,11 +37,11 @@ static const char *const tp_desc[NUM_TPROJ][2] = {
     {"Raised beds that", "the town tends"}, {"Books, history,", "a recipe or two"}};
 static const char *const tp_done[NUM_TPROJ] = {
     "Look at those streets! Flagstones everywhere, and lights strung over the plaza. Lovely!",
-    "The playground's open! Listen to those kids. Milo's already been down the slide twelve times.",
+    "The playground's open! Listen to those kids. Marcy's already been down the slide twelve times.",
     "The boardwalk's finished! A fine stroll from the square right down to the sea.",
     "The bandstand's up! There'll be music on the commons on warm evenings.",
     "The community garden's planted! Everyone takes a turn weeding. Even Brick.",
-    "The library's open! June built the shelves, and half the town has donated books."};
+    "The library's open! Andy built the shelves, and half the town has donated books."};
 // where the commons' projects stand (the town map reserves these sites: grass + a SITE_SIGN)
 static const uint8_t site_x[NUM_TPROJ] = {0, 2, 0, 12, 7, 20};
 static const uint8_t site_w[NUM_TPROJ] = {0, 3, 0, 4, 4, 3};
@@ -101,7 +101,7 @@ static void stars(uint8_t x, uint8_t y, uint8_t p) {
 
 static void celebrate(const char *msg) {   // msg: a literal from this bank (say copies into the box)
     music_play(MUS_JINGLE_FANFARE);
-    set_speaker("Hollis");
+    set_speaker("Joe");
     say(msg);
     ui_speaker = 0;
     music_for_scene();
@@ -175,14 +175,14 @@ uint8_t invest_realtor(void) BANKED {
     if (!(G.mk_flags & MK_OPEN) && prosperity() < 1) return 0;   // nothing in town for sale yet
     if (!(G.inv_tips & 2)) {
         G.inv_tips |= 2;
-        set_speaker("Land Office");
+        set_speaker("Joe");
         say("Big news: the council's selling Market Street, past the park! Lots for new businesses.");
     }
     ui_begin(); ui_money();
     r = ui_menu(0, 3, 13, rm, 2, 0);
     ui_end();
     if (r == 0) return 0;
-    if (r == 1) { set_speaker("Land Office"); market_page(); }
+    if (r == 1) { set_speaker("Joe"); market_page(); }
     ui_speaker = 0;
     return 1;
 }
@@ -237,7 +237,7 @@ static void projects(void) {
         hv = r;
         if (G.town_proj & (1 << r)) ui_dialog("That one's built. The whole town thanks you!");
         else if (!tp_open(r)) {
-            if (tproj[r].market && !(G.mk_flags & MK_OPEN)) ui_dialog("That goes on the commons on Market Street. Buy Market Street at the Land Office first!");
+            if (tproj[r].market && !(G.mk_flags & MK_OPEN)) ui_dialog("That goes on the commons on Market Street. Buy Market Street at Lots & Plots first!");
             else ui_dialog("The town isn't ready for that one yet. Raise its prosperity: businesses, storefronts, projects!");
         } else {
             s_clr(); s_add("Fund the "); s_add(tp_name[r]); s_add("?\n");
@@ -268,8 +268,9 @@ static void overview(void) {
         segs = (uint8_t)((uint16_t)(n - lo) * 10 / (hi - lo));
         for (k = 0; k < 10; k++) ui_char(1 + k, 3, k < segs ? GL_BAR_FULL : GL_BAR_EMPTY);
         s_clr(); s_num(hi - n, 0); s_add(" to go"); ui_text(12, 3, sbuf);
-    } else ui_text(1, 3, "A thriving town!");
-    s_clr(); s_add("Visitors +"); s_num(p * 5, 0); s_add("% sales"); ui_text(1, 4, sbuf);
+    } else if (G.fund_lvl) { s_clr(); s_add("Town Fund level "); s_num(G.fund_lvl, 0); ui_text(1, 3, sbuf); }
+    else ui_text(1, 3, "A thriving town!");
+    s_clr(); s_add("Visitors +"); s_num(p * 5 + fund_pct(), 0); s_add("% sales"); ui_text(1, 4, sbuf);
     ui_text(1, 6, "Business    Night");
     for (b = 0; b < NUM_BIZ_ALL; b++) {
         uint16_t v = biz_income(b);
@@ -286,9 +287,9 @@ static void overview(void) {
 }
 
 void invest_menu(void) BANKED {
-    static const char *const im[4] = {"Overview", "Community", "Market St", "Back"};
+    static const char *const im[5] = {"Overview", "Community", "Market St", "Town Fund", "Back"};
     uint8_t r;
-    set_speaker("Hollis");
+    set_speaker("Joe");
     if (!(G.inv_tips & 1)) {
         G.inv_tips |= 1;
         say("You want to invest in our town? Wonderful! Every business you run makes the town more prosperous.");
@@ -297,11 +298,12 @@ void invest_menu(void) BANKED {
     ui_speaker = 0;
     while (1) {
         ui_begin();
-        r = ui_menu(0, 0, 12, im, 4, 0);
+        r = ui_menu(0, 0, 12, im, 5, 0);
         ui_end();
         if (r == 0) overview();
         else if (r == 1) projects();
-        else if (r == 2) { set_speaker("Hollis"); market_page(); ui_speaker = 0; }
+        else if (r == 2) { set_speaker("Joe"); market_page(); ui_speaker = 0; }
+        else if (r == 3) fund_page();
         else return;
     }
 }
@@ -323,6 +325,7 @@ static void library_visit(void) {
                 return;
             }
     }
+    if (!museum_act()) return;   // museum.c: donate / exhibits; 1 = a book off the shelf
     say(books[rnd() & 3]);
 }
 
@@ -330,7 +333,7 @@ void invest_act(uint8_t act) BANKED {
     uint8_t lot, b, k;
     if (act == ACT_GATE) {
         if (G.mk_flags & MK_OPEN) say("MARKET STREET. Shops, lots and the town commons.");
-        else say("MARKET STREET - FOR SALE. Enquire at the Land Office.");
+        else say("MARKET STREET - FOR SALE. Enquire at Lots & Plots.");
         return;
     }
     if (act >= ACT_LOT0 && act <= ACT_LOT3) {
@@ -343,13 +346,13 @@ void invest_act(uint8_t act) BANKED {
     }
     k = act == ACT_PLAYGROUND ? 1 : act == ACT_BANDSTAND ? 3 : act == ACT_GARDEN ? 4 : 5;
     if (!(G.town_proj & (1 << k))) {
-        s_clr(); s_add("FUTURE SITE: "); s_add(tp_name[k]); s_add(". Fund it on Mayor Hollis's INVEST board.");
+        s_clr(); s_add("FUTURE SITE: "); s_add(tp_name[k]); s_add(". Fund it on Mayor Joe's INVEST board.");
         say(sbuf);
         return;
     }
     switch (k) {
-    case 1: say(milo_beach() ? "The swings creak in the breeze. Milo's at the beach today." :
-                               "Kids' shoes have worn a groove under every swing. Milo's favourite place."); break;
+    case 1: say(milo_beach() ? "The swings creak in the breeze. Marcy's at the beach today." :
+                               "Kids' shoes have worn a groove under every swing. Marcy's favourite place."); break;
     case 3: sfx(SFX_COIN); say("The bandstand. Someone's left a fiddle case on the steps for tonight."); break;
     case 4: say(G.season == SEASON_WINTER ? "The beds are tucked under straw for winter." :
                 "Neat rows, a watering can, a sign: TAKE WHAT YOU NEED, PLANT WHAT YOU CAN."); break;
@@ -362,10 +365,10 @@ static const char *const prosper_lines[NUM_NPC][2] = {
     {"Business is booming! Folks come from the next valley just to shop here.",
      "Traders stop by every week now. I've never seen the town so lively!"},
     {"More folk in town, more horseshoes to make. Hmph. Not complaining.",
-     "The forge has a waiting list now. Your doing, farmer."},
+     "The Anvil has a waiting list now. Your doing, farmer."},
     {"Market Street! I framed half those buildings, you know.",
      "Every storefront in town has had a facelift. I've never been busier!"},
-    {"The cafe's full every lunch now. Visitors, everywhere!",
+    {"Bean There's full every lunch now. Visitors, everywhere!",
      "Folks drive in from the city for supper. Who'd have thought?"},
     {"The town's prospering, farmer! The council's never been happier.",
      "We're on the map! The county paper called us the gem of the valley."},
@@ -376,14 +379,14 @@ uint8_t invest_line(uint8_t npc) BANKED {
     uint8_t p = prosperity();
     if (p < 2 || npc >= NUM_NPC || (rnd() & 1)) return 0;
     if (npc == NPC_MILO && (G.town_proj & TP_PLAYGROUND) && (rnd() & 1)) {
-        say("The playground's the BEST. I went down the slide headfirst! Don't tell Mom.");
+        say("The playground's the BEST. I went down the slide headfirst! Don't tell anyone.");
         return 1;
     }
     say(prosper_lines[npc][p >= 4]);
     return 1;
 }
 
-void invest_store(void) BANKED {   // Rosa's traders' goods: other valleys' farm goods, at a mark-up
+void invest_store(void) BANKED {   // Alyssa's traders' goods: other valleys' farm goods, at a mark-up
     static const uint8_t goods[3] = {I_EGG, I_MILK, I_HONEY};
     uint8_t k, r, q, it;
     uint16_t price;

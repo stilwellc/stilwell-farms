@@ -35,8 +35,8 @@ FFFFFFFFFFFFFFF==FFFFFFFFFFFFFFF
 FT..*TT......T.==,T.....TT.*,.TF
 Ff...f,o....,f.==.f....o.f....fF
 FL......o...*L.==.L....o.L....LF
-===============================F
-===============================F
+================================
+================================
 F.,T..*.Tlccccccccccccl*.R.R.R.F
 Fqhhhhq..cccccccccccccc.,......F
 FvPCSPv.,ccccncccccccccR.R.B.R.F
@@ -73,6 +73,11 @@ place MARKET_TENT 20 6
 place TOWN_FOUNTAIN 15 11
 place TOWN_HOUSE_A 4 12 act=HOUSE
 place REALTOR 24 12 act=REALTOR
+# the Pub (pub.c): west side of the park, open evenings
+place PUB 8 16
+act 8 18 PUB
+act 9 18 PUB
+act 10 18 PUB
 place TOWN_HOUSE_B 28 12 act=HOUSE
 act 13 8 BOARD
 act 15 12 FOUNTAIN
@@ -100,6 +105,8 @@ warp 16 0 FARM 32 62 up
 warp 0 4 MINE 14 3 left
 warp 0 5 MINE 14 4 left
 warp 31 15 BEACH 1 5 right
+warp 31 4 WOODS 1 8 right
+warp 31 5 WOODS 1 9 right
 # Market Street (invest.c): the gate, four lots (biz.c draws what you build), the commons' project sites
 place GATE_CLOSED 13 21 walk act=GATE
 place LOT_SALE 2 23

@@ -1,4 +1,4 @@
-// Stilwell Farms -- title screen with two save slots (banked)
+// Stilwell Farms -- title screen with the save slot (banked)
 #pragma bank 255
 #include <gb/gb.h>
 #include <string.h>
@@ -10,7 +10,7 @@ BANKREF(title_screen)
 static void peek(uint8_t slot) {
     uint8_t v = save_valid(slot);
     s_clr();
-    s_add(slot ? "Farm 2: " : "Farm 1: ");
+    s_add("Farm: ");
     if (!v) s_add("New");
     else if (v == 2) s_add("Old farm");
     else {
@@ -45,11 +45,11 @@ uint8_t title_screen(void) BANKED {
     G.rng_lo = DIV_REG | 1;
     G.rng_hi = t;
     while (1) {
-        peek(0); peek(1);
-        s_clr(); s_add("Options"); lbl_set(2);
+        peek(0);
+        s_clr(); s_add("Options"); lbl_set(1);
         ui_begin();
-        r = ui_menu(1, 9, 18, lp, 3, 0);
-        if (r == 2) { options_menu(); ui_end(); continue; }
+        r = ui_menu(1, 9, 18, lp, 2, 0);
+        if (r == 1) { options_menu(); ui_end(); continue; }
         if (r == 0xFF) { ui_end(); continue; }
         v = save_valid(r);
         if (v) {

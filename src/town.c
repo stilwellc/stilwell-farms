@@ -7,7 +7,7 @@
 BANKREF(town_act)
 
 
-static const char *const npc_names[NUM_NPC] = {"Rosa", "Brick", "June", "Ada", "Hollis", "Milo"};
+static const char *const npc_names[NUM_NPC] = {"Alyssa", "Brick", "Andy", "Raza", "Joe", "Marcy"};
 
 static void refresh(void) { ui_end(); ui_begin(); ui_money(); }
 
@@ -25,8 +25,8 @@ static void sell_menu(void) {
                 s_clr(); s_ch((char)(0x80 + it)); s_add(items[it].name);
                 if (q) s_ch(q == 2 ? (char)0xF1 : (char)0xF0);
                 {   // 4-digit prices (gems) start a column early, so the row still fits the 17 columns
-                    uint8_t wide = item_value(it, q) >= 1000;
-                    s_pad(wide ? 9 : 10); s_ch('x'); s_num(G.inv[it][q], 2); s_ch(' '); s_pad(wide ? 13 : 14); s_num(item_value(it, q), 3);
+                    uint8_t wide = sell_value(it, q) >= 1000;
+                    s_pad(wide ? 9 : 10); s_ch('x'); s_num(G.inv[it][q], 2); s_ch(' '); s_pad(wide ? 13 : 14); s_num(sell_value(it, q), 3);
                 }
                 lbl_set(n); mi[n] = it; mq[n] = q; n++;
             }
@@ -45,20 +45,20 @@ static void sell_menu(void) {
         }
         if (r == 0xFF) return;
         k = r; it = mi[k]; q = mq[k];
-        qty = ui_quantity(G.inv[it][q] > 99 ? 99 : G.inv[it][q], item_value(it, q));
+        qty = ui_quantity(G.inv[it][q] > 99 ? 99 : G.inv[it][q], sell_value(it, q));
         if (!qty) continue;
         G.inv[it][q] -= qty;
-        G.gold += (uint32_t)qty * item_value(it, q);
-        G.earned += (uint32_t)qty * item_value(it, q);
+        G.gold += (uint32_t)qty * sell_value(it, q);
+        G.earned += (uint32_t)qty * sell_value(it, q);
         mark_shipped(it);
         hud_draw();
         goals_check();
     }
 }
 
-// ---------------------------------------------------------------- general store (Rosa)
+// ---------------------------------------------------------------- general store (Alyssa)
 // rarity: Rare packets cost 3x and yield 2; Legendary cost 8x, yield 3-4 at gold odds, and (like golden
-// animals) Rosa only stocks them for proven farmers: Year 2, or LEGEND_EARNED earned (docs/BALANCE.md).
+// animals) Alyssa only stocks them for proven farmers: Year 2, or LEGEND_EARNED earned (docs/BALANCE.md).
 static const uint8_t rar_mult[NUM_RARITY] = {1, 3, 8};
 #define LEGEND_EARNED 250000UL
 static uint8_t legend_ok(void) { return G.year > 1 || G.earned >= LEGEND_EARNED; }
@@ -151,8 +151,10 @@ static void buy_animal(uint8_t kind) {
     for (k = 0; k < MAX_ANIMALS; k++) if (G.anim[k].kind == 0xFF) break;
     if (k == MAX_ANIMALS) { ui_dialog("That's as many animals as you can care for!"); return; }
     G.gold -= price;
+    G.anim[k].trait = (rnd() & TR_TEMPER); G.anim[k].gen = 0;
     G.anim[k].kind = kind; G.anim[k].home = home; G.anim[k].happy = 100; G.anim[k].age = ADULT_AGE; G.anim[k].flags = br << 6;
     strcpy(G.anim[k].name, breed_pet[ki][br]);
+    herd_mark(k);
     ui_end();
     s_clr(); s_add("Name your "); s_add(kind_word[ki]);   // prompt via sbuf: ui_name lives in another bank
     ui_name(sbuf, G.anim[k].name, 5);
@@ -164,15 +166,15 @@ static void buy_animal(uint8_t kind) {
 }
 
 static const char *const store_items[8] = {"Seeds", "Fertilizer", "Hay", "Cows", "Hens", "Sheep", "Sell", "Bye"};
-// with a stable and no horse yet, Rosa can find you one (horse.c)
+// with a stable and no horse yet, Alyssa can find you one (horse.c)
 static const char *const store_items_h[9] = {"Seeds", "Fertilizer", "Hay", "Cows", "Hens", "Sheep", "Horse", "Sell", "Bye"};
-// a prosperous town (invest.c, level 2+) brings traders: Rosa adds their goods before Sell
+// a prosperous town (invest.c, level 2+) brings traders: Alyssa adds their goods before Sell
 static const char *const store_items_g[9] = {"Seeds", "Fertilizer", "Hay", "Cows", "Hens", "Sheep", "Goods", "Sell", "Bye"};
 static const char *const store_items_hg[10] = {"Seeds", "Fertilizer", "Hay", "Cows", "Hens", "Sheep", "Horse", "Goods", "Sell", "Bye"};
 static void store(void) {
     uint8_t r, q;
-    set_speaker("Rosa");
-    say("Welcome to the General Store! Seeds for every season, and I'll buy whatever you grow.");
+    set_speaker("Alyssa");
+    say("Welcome to Seeds & Needs! If it grows, I sell it. If you grew it, I'll buy it.");
     while (1) {
         uint8_t hs = !G.horse && bld_find(B_STABLE) != 0xFF, gd = prosperity() >= 2;
         ui_begin(); ui_money();
@@ -195,7 +197,7 @@ static void store(void) {
         case 4: buy_animal(A_HEN); break;
         case 5: buy_animal(A_SHEEP); break;
         case 6: sell_filter = 0; sell_menu(); break;
-        default: ui_dialog("Come back soon!"); ui_end(); ui_speaker = 0; return;
+        default: ui_dialog("Go on, get planting! Those seeds won't bury themselves."); ui_end(); ui_speaker = 0; return;
         }
         ui_end();
     }
@@ -210,7 +212,7 @@ static void smith(void) {
     static const char *const sm[3] = {"Upgrade", "Sell Ore", "Bye"};   // ore, coal and gems
     uint8_t r, k, t, up = 0xFF;
     set_speaker("Brick");
-    say("Brick's Forge. Bring me ore and coin and I'll make your tools sing.");
+    say("The Grumpy Anvil. I hit things till they're better. Got ore? Got coin? Good.");
     while (1) {
         ui_begin(); ui_money();
         r = ui_menu(0, 0, 11, sm, 3, 0);
@@ -259,7 +261,7 @@ static void smith(void) {
     }
 }
 
-// ---------------------------------------------------------------- carpenter (June)
+// ---------------------------------------------------------------- carpenter (Andy)
 static const char *const style_names_[4] = {"Classic", "Modern", "Log Cabin", "Cottage"};
 static const uint16_t style_gold[4] = {1500, 4000, 2500, 3000};
 
@@ -267,8 +269,8 @@ static void carpenter(void) {
     static const char *const cm[5] = {"House", "Styles", "Materials", "Advice", "Bye"};
     uint8_t r, h = bld_find(B_HOUSE), lv, k, q;
     const char *toast = 0;
-    set_speaker("June");
-    say("June's Carpentry! Houses, renovations, lumber. What are we building?");
+    set_speaker("Andy");
+    say("Knock on Wood! Measure twice, cut once, blame the wood. What are we building?");
     while (1) {
         ui_begin(); ui_money();
         r = ui_menu(0, 0, 12, cm, 5, 0);
@@ -329,7 +331,7 @@ static void carpenter(void) {
             ui_dialog("Farm buildings, fences, paths, ponds, decor... you build all of it yourself from your START menu's BUILD page. Anywhere on land you own!");
             ui_dialog("And if a spot doesn't feel right, use MOVE to pick a building up and put it somewhere new.");
         } else {
-            ui_dialog("Happy building!"); ui_end(); ui_speaker = 0;
+            ui_dialog("Happy building! Mind your thumbs."); ui_end(); ui_speaker = 0;
             if (toast) hud_flash(toast);   // level-up toast once the shop closes
             return;
         }
@@ -337,18 +339,18 @@ static void carpenter(void) {
     }
 }
 
-// ---------------------------------------------------------------- cafe (Ada)
+// ---------------------------------------------------------------- cafe (Raza)
 static void cafe(void) {
     static const char *const fm[4] = {"Coffee   150", "Lunch    350", "Feast    800", "Bye"};
     static const uint16_t price[3] = {150, 350, 800};
     static const uint8_t energy[3] = {20, 50, 255};
     uint8_t r;
-    set_speaker("Ada");
-    say("Welcome to Ada's! Sit down, you look like you've been pulling weeds all day.");
+    set_speaker("Raza");
+    say("Welcome to Bean There! Sit, sit. You look like you've been pulling weeds all day.");
     while (1) {
         ui_begin(); ui_money();
         r = ui_menu(0, 4, 15, fm, 4, 0);   // 12-column labels + cursor + borders
-        refresh();   // Ada's name tab would cover "Bye" while she answers
+        refresh();   // Raza's name tab would cover "Bye" during the answer
         if (r < 3) {
             if (G.gold < price[r]) ui_dialog("Maybe next time, hon.");
             else if (G.ate >= G.energy_max) ui_dialog("You've eaten plenty today, hon. Get some sleep!");   // one bar a day
@@ -407,7 +409,7 @@ static void land_panel(uint8_t p) {
 static void realtor(void) {
     uint8_t p, n = 0, map[LAND_ROWS], r, pass, hv = 0;
     if (invest_realtor()) return;   // invest.c: Market Street (once the town has some prosperity)
-    set_speaker("Land Office");
+    set_speaker("Joe");
     for (pass = 0; pass < 2; pass++)
         for (p = 0; p < NUM_PLOTS && n < LAND_ROWS; p++) {
             uint8_t x = (p & 7) << 3, y = (p >> 3) << 3, near;
@@ -420,7 +422,7 @@ static void realtor(void) {
             lbl_set(n); map[n++] = p;
         }
     if (!n) { say("You own every acre around! What a farm."); ui_speaker = 0; return; }
-    say("Land for sale all around your farm! Woods, a lake, a river, a quarry... pick a plot.");
+    say("Welcome to Lots & Plots! Woods, a lake, a river, a quarry... dirt cheap. Pick a plot.");
     ui_begin();   // (the HUD shows your gold; the list needs the full width)
     ui_hover = &hv;
     while (1) {
@@ -440,7 +442,7 @@ static const char *const lines[NUM_NPC][3] = {
      "Your farm's the talk of the town! People say you've got a green thumb.",
      "You know, your grandpa used to buy his seeds right here. He'd be so proud."},
     {"Hmph. Ore from the quarry or the mine makes the best tools. Bring me some.",
-     "That hammer of yours could use some love. Come by the forge.",
+     "That hammer of yours could use some love. Come by the Anvil.",
      "You're alright, farmer. Most folks don't work this hard."},
     {"Every good farm starts with a good fence. And a good plan!",
      "I saw your place from the road. Love what you're doing with it!",
@@ -473,14 +475,15 @@ static const char *const bday_lines[NUM_NPC] = {
     "It's my birthday today, dear! Don't tell anyone how old. I've stopped counting at 39.",
     "...Who told you it's my birthday? Hmph. Thanks.",
     "It's my BIRTHDAY! I'm building myself a cake. Out of wood. It's a metaphor!",
-    "Birthday today, hon. Milo made me breakfast. Mostly eggshell. Best one ever.",
+    "Birthday today, hon. Marcy made me breakfast. Mostly eggshell. Best one ever.",
     "Another year older today! Your grandpa always sent a pumpkin on my birthday.",
     "It's my BIRTHDAY! I'm EIGHT! Almost nine! Almost ten! Then I get a DOG!"};
 
 void npc_talk(uint8_t npc) BANKED {
-    uint8_t h = G.friend[npc] / 50, it, bday = tl_birthday(npc);
+    uint8_t h = G.friend[npc] / 50, it, bday = tl_birthday(npc), first = 0;
     set_speaker(npc_names[npc]);
     if (!(G.talked & (1 << npc))) {
+        first = 1;
         G.talked |= 1 << npc;
         if (G.friend[npc] < 253) G.friend[npc] += 2;
     }
@@ -490,6 +493,8 @@ void npc_talk(uint8_t npc) BANKED {
     else if (scene == MAP_BEACH) say("Weekends are for the beach! Someday I'm gonna catch a tuna off the end of the pier.");
     else if (!invest_line(npc)) say(lines[npc][h >= 3 ? 2 : h >= 1 ? 1 : (rnd() & 1) ? 0 : 1]);   // invest.c: a busy town
     cook_friend(npc);   // cooking.c: at 2 hearts they share a recipe
+    if (wish_talk(npc, first)) { ui_speaker = 0; return; }   // friends2.c: this year's big wish
+    set_speaker(npc_names[npc]);
     if (!(G.gifted & (1 << npc)) && ui_yesno(bday ? "Give a birthday gift?" : "Give a gift?")) {
         it = ui_pick_item(PICK_ANY);
         if (it != 0xFF) {
@@ -513,6 +518,7 @@ void town_act(uint8_t act) BANKED {
     case ACT_CARPENTER: carpenter(); break;
     case ACT_CAFE: cafe(); break;
     case ACT_REALTOR: realtor(); break;
+    case ACT_PUB: pub_act(); break;
     case ACT_HALL: staff_hall(); break;
     case ACT_BOARD: board_act(); break;
     case ACT_BAKERY: biz_act(0); break;

@@ -171,8 +171,8 @@ static void pal_push(uint8_t tint, uint8_t fade) {
     if (scene == SCENE_FARM) { memcpy(pbuf, src, 64); accent_patch(); src = pbuf; }   // farm colours (built in place)
     pal_build(src, 32, PAL_UI * 4);
     set_bkg_palette(0, 8, pbuf);
-    if (IS_AREA(scene)) {
-        pal_build(area_pal + (scene == MAP_BEACH ? 8 : 0), 8, 0xFF);
+    if (IS_MINE(scene) || IS_SHORE(scene)) {   // (the other places wear the farm's own seasonal colours)
+        pal_build(area_pal + (IS_SHORE(scene) ? 8 : 0), 8, 0xFF);
         set_bkg_palette(PAL_CROP, 1, pbuf);
         set_bkg_palette(PAL_STONE, 1, pbuf + 4);
     }
@@ -220,7 +220,7 @@ static void flash(void) {  // lightning
 // ---------------------------------------------------------------- music
 void music_for_scene(void) {
     uint8_t want;
-    if (scene == SCENE_FARM || IS_INTERIOR(scene)) {
+    if (scene == SCENE_FARM || IS_INTERIOR(scene) || (IS_NEW(scene) && scene != MAP_ISLAND)) {
         if (G.time >= 1200) want = MUS_NIGHT;
         else want = G.season == 0 ? MUS_SPRING : G.season == 1 ? MUS_SUMMER : G.season == 2 ? MUS_FALL : MUS_WINTER;
     } else if (IS_AREA(scene)) {
@@ -488,6 +488,7 @@ static void act(void) {
     if (a != 0xFF && actor_npc(a) != 0xFF) { npc_talk(actor_npc(a)); return; }
     for (k = 0; k < sc_nacts; k++)
         if (sc_acts[k].x == x && sc_acts[k].y == y) { town_act(sc_acts[k].act); return; }
+    if (scene == MAP_TOWN && y == 7 && (x == 10 || x == 11)) { daily_trader(); return; }   // the west market tent (daily.c)
     if (fest_on) festival_poke(x, y);   // town life: the egg hunt searches flowerbeds, trees, benches...
 }
 
@@ -618,11 +619,11 @@ void main(void) {
     enable_interrupts();
     DISPLAY_ON;
     while (1) {
-        uint8_t choice = title_screen();   // 0 = new game in slot 0, 1/2 = continue slot 1/2, 3/4 = new in slot 1/2
-        if (choice >= 1 && choice <= 2 && save_load(choice - 1)) {
+        uint8_t choice = title_screen();   // 1 = continue the saved farm, anything else = a new farm
+        if (choice == 1 && save_load(0)) {
             enter_scene(G.scene, G.px, G.py, G.facing);
         } else {
-            save_slot = choice >= 3 ? choice - 3 : 0;
+            save_slot = 0;
             world_new();
             enter_scene(SCENE_FARM, G.px, G.py, G.facing);
             ui_speaker = "Grandpa";

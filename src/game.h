@@ -85,6 +85,7 @@ enum {
     // cooking (cooking.c): dishes, cooked from the fridge in the house; dish d is item I_DISH0 + d
     I_SALAD, I_OMELET, I_FISHFRY, I_FISHSTEW, I_CHOWDER, I_PUMPSOUP, I_BERRYPIE, I_APPLEPIE,
     I_CASSEROLE, I_RISOTTO, I_VEGSTEW, I_SORBET, I_MUFFIN, I_COBBLER, I_STIRFRY, I_FEAST,      // 54..69
+    I_GOATMILK, I_DUCKEGG, I_TRUFFLE,                                           // 70..72 goats, ducks, pigs (save v7)
     NUM_ITEMS
 };
 #define I_DISH0 I_SALAD
@@ -133,9 +134,18 @@ enum { D_DOWN, D_UP, D_LEFT, D_RIGHT };
 
 // ---- people & animals ------------------------------------------------------------
 enum { NPC_ROSA, NPC_BRICK, NPC_JUNE, NPC_ADA, NPC_HOLLIS, NPC_MILO, NUM_NPC };
-enum { A_COW, A_HEN, A_SHEEP };   // sheep share the barn with cows
-#define MAX_ANIMALS 12
-typedef struct { uint8_t kind, home, happy, age, flags; char name[6]; } Animal;  // kind 0xFF empty
+enum { A_COW, A_HEN, A_SHEEP, A_GOAT, A_DUCK, A_PIG, NUM_KINDS };   // kind % 3: 0 milker (barn), 1 layer (coop), 2 slow (barn): animals.c
+#define MAX_ANIMALS 36      // six full barns / coops (was 12: a third barn or coop could never be filled)
+#define V5_ANIMALS 12       // save v5 and older kept this many, earlier in GameState
+typedef struct { uint8_t kind, home, happy, age, flags; char name[6]; uint8_t trait, gen; } Animal;  // kind 0xFF empty
+#define OLD_ANIMAL 11        // an Animal up to save v6 (no trait, no gen)
+#define AF_PAIR 0x20         // paired for breeding (the panel's menu): only pairs have babies
+#define TR_SIZE 0x03         // trait: 0 normal, SZ_BIG, SZ_RUNT
+#define SZ_BIG 1
+#define SZ_RUNT 2
+#define TR_TEMPER 0x0C       // 0 calm, 1 shy, 2 playful, 3 proud (<< 2)
+#define TR_CARE 0x70         // a baby's days of care so far
+#define TR_SPARKLE 0x80      // the rare one
 #define AF_FED 0x01
 #define AF_PET 0x02
 #define AF_READY 0x04
@@ -172,7 +182,7 @@ enum { ROLE_WATER, ROLE_HARVEST, ROLE_RANCH, ROLE_GROUNDS, ROLE_SHOP, NUM_ROLES 
 #define TP_LIBRARY 32
 #define PANTRY 8                // ingredient slots per business
 #define SAVE_MAGIC 0x5F17
-#define SAVE_VERSION 5
+#define SAVE_VERSION 7
 #define MAX_FURN 24             // house furniture pieces (interior.c)
 #define NUM_ACCENT 3            // design tools: recolourable accent palette entries
 #define BP_SLOTS 2              // design tools: blueprint slots, each up to BP_MAX x BP_MAX cells
@@ -183,7 +193,7 @@ typedef struct {
     uint8_t version;
     uint8_t plots[8];               // owned land plots: bit x of byte y = plot (x, y) of the 8x8 grid
     Building bld[MAX_BLD];
-    Animal anim[MAX_ANIMALS];
+    uint8_t anim_v5[V5_ANIMALS * OLD_ANIMAL];   // where the animals lived up to save v5; carried into anim on load, spare since
     uint32_t gold, earned, ship_value;
     uint16_t time;                  // minutes since midnight (360..1560)
     uint8_t day, season, year;
@@ -275,10 +285,30 @@ typedef struct {
     uint8_t bz_sold[NUM_LOTS];
     uint8_t rest_item[PANTRY];      // the restaurant's shelves: item + 1 on each (0 = free shelf)
     uint8_t town_proj;              // TP bit per community project built (invest.c)
-    uint8_t inv_tips;               // one-time pitches: 1 Hollis on investing, 2 the Land Office on Market Street
+    uint8_t inv_tips;               // one-time pitches: 1 Joe on investing, 2 the Land Office on Market Street
     uint32_t invested;              // gold put into the town, lifetime
     // ---- balance (cooking.c, town.c cafe): 1 byte, valid at zero
-    uint8_t ate;                    // energy restored by food today (dishes + Ada's), at most energy_max; cleared overnight
+    uint8_t ate;                    // energy restored by food today (dishes + Raza's), at most energy_max; cleared overnight
+    // ---- v6: room for more animals. Kept last so every older save's layout is a prefix of this one
+    Animal anim[MAX_ANIMALS];
+    // ---- v6: the years after the valley is restored (lategame.c, goals.c): all valid at zero
+    uint8_t review_year;            // the year Grandpa last sent his spring review for
+    uint16_t review_score;          // ... and what the farm scored
+    uint8_t fund_lvl;               // Town Fund levels bought
+    uint32_t fund_paid;             // gold given toward the next one
+    uint8_t con_id;                 // contracts on the board are for year * 4 + season, + 1 (0 = none posted yet)
+    uint8_t con_item[3], con_need[3], con_have[3];
+    uint8_t con_stars;              // seasons with all three contracts filled
+    uint8_t donated[(NUM_ITEMS + 7) / 8];   // museum.c: a bit per item given to the Library's collection
+    uint16_t museum_sets;           // ... a bit per group already thanked for; bit 15 = the whole collection
+    uint8_t daily, daily_arg, daily_flags;   // daily.c: today's surprise (D_*), its item / seed, what's been taken
+    uint8_t npc_mail;               // friends2.c: a letter waiting from NPC n (bit n)
+    uint8_t wish_year, wish_done;   // ... this year's wishes granted (bit per NPC)
+    uint8_t area_stamp, area_taken[5];  // areas.c: what's been picked today in each place to visit (bit 7 = its daily find)
+    uint8_t tame;                   // ... days of hay left in the High Pasture's trough (3 = one follows you home)
+    uint8_t herd[4];                // animals.c, the Herd Book: bit kind * 4 + breed ever owned; bits 24-29 sparkles
+    uint8_t herd_done;              // ... rows already rewarded (bit per kind), bit 7 the whole book
+    uint8_t spare6[3];             // zero: room for what comes next without another save version
     uint16_t checksum;
 } GameState;
 extern GameState G;
@@ -287,7 +317,10 @@ extern GameState G;
 #define IS_BARNIN(s) ((uint8_t)((s) - MAP_BARN) < 2)   // inside a barn or coop (barn.c; MAP_COOP = MAP_BARN + 1)
 #define IS_INTERIOR(s) ((uint8_t)((s) - MAP_HOUSE1) < 2 || IS_BARNIN(s))   // inside a barn or coop (barn.c)
 #define IS_MINE(s) ((s) >= MAP_MINE && (s) <= MAP_MINE_C)     // the entrance cave and the three floor layouts
-#define IS_AREA(s) ((s) == MAP_BEACH || IS_MINE(s))
+#define IS_NEW(s) ((uint8_t)((s) - MAP_ISLAND) < 5)        // Shell Island, the Market, the High Pasture, the Quarry, the Old Woods
+#define IS_SHORE(s) ((s) == MAP_BEACH || (s) == MAP_ISLAND)
+#define IS_OPEN(s) ((s) == MAP_BEACH || IS_NEW(s))         // open-air places to visit (areas.c)
+#define IS_AREA(s) (IS_OPEN(s) || IS_MINE(s))
 #define MINE_FLOORS 20
 
 // ---- engine globals ----------------------------------------------------------------
@@ -452,7 +485,7 @@ void portrait(uint8_t tile, uint8_t pal) BANKED;   // a sprite on a stall tile i
 // horse.c (banked): the horse from the stable
 extern uint8_t riding;                  // in the saddle (farm only; any scene change dismounts)
 extern uint16_t ppx, ppy;               // main.c: player pixel position
-void horse_shop(void) BANKED;           // Rosa's store: pick a coat, name it
+void horse_shop(void) BANKED;           // Alyssa's store: pick a coat, name it
 void horse_talk(uint8_t a) BANKED;      // A on the horse: ride / brush / info
 void horse_dismount(void) BANKED;
 void stable_act(void) BANKED;
@@ -483,7 +516,7 @@ void collection_page(void) BANKED;
 // staff.c (banked): farmhands
 void staff_overnight(void) BANKED;      // payroll, then the night's work (called from world_overnight)
 void staff_report(void) BANKED;         // morning report lines
-void staff_hall(void) BANKED;           // Hollis's menu: festival, talk, valley board, hire, staff
+void staff_hall(void) BANKED;           // Joe's menu: festival, talk, valley board, hire, staff
 void staff_page(void) BANKED;           // STAFF page: list, wages, fire
 void staff_talk(uint8_t role) BANKED;   // A on a farmhand
 uint16_t staff_spot(uint8_t role) BANKED;   // where they work today: x | y << 8, 0xFFFF = off the farm
@@ -503,9 +536,11 @@ uint8_t beach_finds(void) BANKED;               // finds still lying on the beac
 uint8_t save_valid(uint8_t slot) BANKED;
 void save_write(void) BANKED;
 uint8_t save_load(uint8_t slot) BANKED;
-extern uint8_t save_slot;
+extern uint8_t save_slot;            // always 0: a 32KB cartridge holds one save (see save.c)
 extern uint8_t save_info[3];        // season, day, year of the slot save_valid() checked last
 // save_valid: 0 empty, 2 a first-release farm, 3/4 a v3/v4 save (carried into the 64x64 valley on load), 5 current
+// pub.c (banked)
+void pub_act(void) BANKED;               // the Pub's bar: Corey, from 4pm
 // title.c (banked)
 uint8_t title_screen(void) BANKED;
 // biz.c (banked): town businesses
@@ -519,13 +554,46 @@ uint16_t biz_income(uint8_t b) BANKED;       // last night's takings of business
 uint8_t biz_count(void) BANKED;              // businesses owned
 uint8_t biz_tiers(void) BANKED;              // facade tiers summed over owned businesses
 // invest.c (banked): Market Street, community projects, prosperity, the Investments view
+#define MAIL_FRIEND 27                       // G.mail: a townsperson's letter waits (friends2.c)
+void friends_overnight(void) BANKED;         // friends2.c: a letter for every new heart
+void friends_letter(void) BANKED;            // ... read the next one
+uint8_t wish_talk(uint8_t npc, uint8_t first_today) BANKED;   // ... this year's big wish; 1 = it was granted just now
+// animals.c: kinds, breeds, traits, the Herd Book
+uint8_t anim_item(uint8_t an) BANKED;        // what it gives
+uint8_t anim_yield(uint8_t an) BANKED;       // (quality << 4) | count right now
+uint8_t anim_collect(uint8_t an) BANKED;     // into the bag; sbuf = "+2 Milk"; -> count
+uint16_t anim_worth(uint8_t an) BANKED;      // what a buyer pays
+void anim_born(uint8_t c, uint8_t mom, uint8_t dad) BANKED;   // a newborn's traits
+void anim_night(uint8_t an) BANKED;          // temperament and baby care, each night
+void s_kind(uint8_t kind) BANKED;            // sbuf += "cow"
+void s_produce(uint8_t kind) BANKED;         // sbuf += "Milk"
+void s_breed(uint8_t an, uint8_t baby) BANKED;   // sbuf += "Jersey cow" / "Jersey calf"
+void s_traits(uint8_t an) BANKED;            // sbuf += "Big playful G2"
+void herd_mark(uint8_t an) BANKED;
+void herd_all(void) BANKED;
+void herd_page(void) BANKED;
+enum { D_NONE, D_TRADER, D_BOTTLE, D_HOT, D_FISH };
+#define BOTTLE_X 10                          // where the beach bottle lies
+#define BOTTLE_Y 6
+#define BOTTLE_HERE (G.daily == D_BOTTLE && !(G.daily_flags & 1))
+void daily_roll(void) BANKED;                // daily.c: tomorrow's surprise (overnight)
+void daily_report(void) BANKED;              // ... its line in the morning report
+void daily_tv(void) BANKED;                  // ... and on the TV
+uint8_t daily_fish(void) BANKED;             // the fish that is running today, once: 0xFF none
+void daily_bottle(void) BANKED;              // open the bottle on the beach
+void daily_trader(void) BANKED;              // the west market tent in the square
+uint16_t sell_value(uint8_t it, uint8_t q) BANKED;   // item_value, doubled for today's hot item
+uint8_t museum_act(void) BANKED;             // museum.c: the Library's collection; 1 = read a book
+void fund_page(void) BANKED;                 // lategame.c: the Town Fund (Joe), past prosperity 5
+uint8_t fund_pct(void) BANKED;               // ... % it adds to business takings and contract pay
+void contracts_board(void) BANKED;           // lategame.c: the season's three bulk orders (year 2 on)
 uint8_t prosperity(void) BANKED;             // Town Prosperity level 0..5
 uint8_t prosperity_pts(void) BANKED;
-void invest_menu(void) BANKED;               // Hollis's INVEST: overview, community projects, Market Street
+void invest_menu(void) BANKED;               // Joe's INVEST: overview, community projects, Market Street
 void invest_act(uint8_t act) BANKED;         // A on a Market Street act (gate, lots, project sites)
 uint8_t invest_realtor(void) BANKED;         // Land Office: 1 if the town lots were handled (don't list farm land)
 uint8_t invest_line(uint8_t npc) BANKED;     // a townsperson remarks on the town's prosperity: 1 if said
-void invest_store(void) BANKED;              // Rosa's traders' goods (prosperity 2+)
+void invest_store(void) BANKED;              // Alyssa's traders' goods (prosperity 2+)
 mt_t invest_mt(uint8_t x, uint8_t y) BANKED; // town upgrades drawn over the map (paving, lights, boardwalk, Market St)
 uint8_t invest_spot(uint8_t npc, uint8_t s) BANKED;   // townlife: a stop moved to Market Street
 // townlife.c (banked): townsfolk routines, greetings, heart events, birthdays
@@ -533,10 +601,11 @@ uint8_t tl_spot(uint8_t npc) BANKED;        // where the schedule puts them now:
 uint8_t tl_shop_open(uint8_t act) BANKED;   // shop counters are staffed only while the owner is scheduled there
 void tl_closed_sign(uint8_t act) BANKED;    // the posted hours
 void tl_greet(uint8_t npc) BANKED;          // HUD greeting as you pass
+uint8_t heart5_try(uint8_t npc, uint8_t a) BANKED;               // hearts5.c: the scene at five full hearts
 uint8_t tl_heart_try(uint8_t npc, uint8_t walk_in) BANKED;   // play a due heart event; 1 if one played
 void tl_arrive(void) BANKED;                // first frame in town: a due heart event walks up to you
 uint8_t tl_birthday(uint8_t npc) BANKED;    // 1 on their birthday
-uint8_t milo_beach(void) BANKED;            // Milo is at the beach (weekend days), not in town
+uint8_t milo_beach(void) BANKED;            // Marcy is at the beach (weekend days), not in town
 void tl_house(void) BANKED;                 // A on a townhouse door
 void friends_rows(void) BANKED;             // FRIENDS page body
 #define FESTIVAL_DAY() (G.season == SEASON_WINTER ? G.day == 25 : G.day == 14)
@@ -549,7 +618,7 @@ void emote(uint8_t slot, uint8_t kind, uint8_t frames) BANKED;   // bubble over 
 enum { EMO_NONE, EMO_EXCLAIM, EMO_HEART, EMO_NOTE, EMO_DOTS };
 void actors_resched(void) BANKED;           // send everyone toward their scheduled spot now
 // festival.c (banked)
-void festival_hall(void) BANKED;            // Hollis on a festival day: the season's game
+void festival_hall(void) BANKED;            // Joe on a festival day: the season's game
 void festival_tick(void) BANKED;            // every field frame in town while a festival game runs
 uint8_t festival_poke(uint8_t x, uint8_t y) BANKED;   // A on a town cell with no act: 1 if used
 extern uint8_t fest_on;                     // a walk-around festival game (egg hunt) is running
@@ -561,7 +630,7 @@ uint8_t cook_tv(void) BANKED;            // the TV's Sunday cooking show; 1 if i
 void cook_friend(uint8_t npc) BANKED;    // a good friend hands over their recipe
 void cook_learn(uint8_t d) BANKED;       // learn dish d (with a toast)
 // valley.c (banked): the Valley Restoration projects
-void valley_board(void) BANKED;          // town hall: Hollis's restoration board
+void valley_board(void) BANKED;          // town hall: Joe's restoration board
 void valley_page(void) BANKED;           // FARM > VALLEY progress page
 mt_t valley_mt(uint8_t x, uint8_t y) BANKED;   // restored town art, else 0xFFFF
 void valley_letter(uint8_t p) BANKED;    // Grandpa's letter for project p

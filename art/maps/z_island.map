@@ -1,0 +1,35 @@
+# Shell Island: row out from the end of the beach pier. Twice the shells, a tide pool, deep water on every side
+# (the big fish come in close here at any hour), and one patch of sand worth digging each day (areas.c).
+map ISLAND set=BEACH w=24 h=18 music=BEACH
+key ~ WATER_15 water
+key w BEACH_WETSAND walk
+key " BEACH_DUNE walk
+key . SAND walk
+key : BEACH_SAND2 walk
+key | BEACH_PIER walk
+key ! BEACH_PIER_END walk
+key r BEACH_ROCK block
+key t BEACH_TIDEPOOL block
+key u BEACH_UMBRELLA block
+grid
+~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~wwwwwwwwwww~~~~~~~
+~~~~ww"""""""""""ww~~~~~
+~~~w..............w~~~~~
+~~w.....:......r...w~~~~
+~~w..........:..rt..w~~~
+~~w...:..............w~~
+~~w.........u.....:..w~~
+~~~w................w~~~
+~~~~ww.....:......ww~~~~
+~~~~~~wwww.|.wwwww~~~~~~
+~~~~~~~~~~w|w~~~~~~~~~~~
+~~~~~~~~~~~|~~~~~~~~~~~~
+~~~~~~~~~~~|~~~~~~~~~~~~
+~~~~~~~~~~~!~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~
+place BEACH_PALM 5 3
+place BEACH_PALM 15 3
+warp 11 15 BEACH 15 14 up

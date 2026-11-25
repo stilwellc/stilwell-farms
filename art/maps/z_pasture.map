@@ -1,0 +1,33 @@
+# The High Pasture: by minecart, up above the valley. Wild herbs and flowers, an old paddock, and a herd that
+# keeps its distance. Leave hay in the trough three days running and one of them follows you home (areas.c).
+map PASTURE set=FARM w=24 h=14 music=SPRING
+key # FOREST block
+key P PINE block
+key B BIRCH block
+key b BUSH block
+key . GRASS walk
+key , GRASS2 walk
+key * WILDFLOWER walk
+key = PATH walk
+key h FENCE_H block
+key v FENCE_V block
+key q FENCE_POST block
+key t TROUGH block
+key y HAY_BALE block
+grid
+########################
+#P..,....*.....,....*.P#
+#..*....,.......*.....P#
+#.....hhhhqhhhh.....,..#
+#..,..v...t...v.*......#
+#.....v.......v.....B..#
+#*....hhq...qhh..,.....#
+#...,.......*......b...#
+#.b......,........*....#
+#....*.......y....,....#
+#..,......y......*....P#
+#P....*.......,......PP#
+#PP.......==........PPP#
+##########==############
+warp 10 13 MINE 11 6 up
+warp 11 13 MINE 11 6 up

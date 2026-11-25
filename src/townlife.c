@@ -6,7 +6,7 @@
 
 BANKREF(tl_spot)
 
-static const char *const npc_names[NUM_NPC] = {"Rosa", "Brick", "June", "Ada", "Hollis", "Milo"};
+static const char *const npc_names[NUM_NPC] = {"Alyssa", "Brick", "Andy", "Raza", "Joe", "Marcy"};
 
 // ---------------------------------------------------------------- daily routines
 // Each townsperson's day is a list of (time, spot) stops; they walk the flow field to each stop in turn.
@@ -62,7 +62,7 @@ static uint8_t now_t(void) { return (uint8_t)(G.time / 10); }
 static uint8_t weekday(void) { return (uint8_t)((G.day - 1) % 7); }   // 0 Monday .. 6 Sunday (day 1 is a Monday)
 static uint8_t wet(void) { return G.weather == 1 || G.weather == 3; }
 
-// Milo spends weekend days (8am-6pm) at the beach, by the pier (areas.c), unless it's a festival
+// Marcy spends weekend days (8am-6pm) at the beach, by the pier (areas.c), unless it's a festival
 uint8_t milo_beach(void) BANKED {
     uint8_t t = now_t();
     return weekday() >= 5 && t >= T(8, 0) && t < T(18, 0) && !FESTIVAL_DAY();
@@ -111,12 +111,12 @@ void tl_closed_sign(uint8_t act) BANKED {
         say("CLOSED for the festival! Come find us around the fountain.");
         return;
     }
-    if (n == NPC_HOLLIS && t >= T(12, 0) && t < T(13, 0)) { say("Out to lunch at Ada's. Back at 1pm! -Mayor Hollis"); return; }
+    if (n == NPC_HOLLIS && t >= T(12, 0) && t < T(13, 0)) { say("Out to lunch at Bean There. Back at 1pm! -Mayor Joe"); return; }
     switch (act) {
-    case ACT_STORE: say("CLOSED.\nGeneral Store\nOpen every day, 8am to 7pm. -Rosa"); break;
-    case ACT_SMITH: say("CLOSED.\nBrick's Forge\n9am to 6pm. Closed Sundays."); break;
-    case ACT_CARPENTER: say("CLOSED.\nJune's Carpentry\n9am to 6pm, Monday to Saturday."); break;
-    case ACT_CAFE: say("CLOSED.\nAda's Cafe\nOpen every day, 7am to 9pm. Come back hungry!"); break;
+    case ACT_STORE: say("CLOSED.\nSeeds & Needs\n8am to 7pm daily. Seeds need sleep too! -Alyssa"); break;
+    case ACT_SMITH: say("CLOSED.\nThe Grumpy Anvil\n9am to 6pm. Never Sundays. Don't knock."); break;
+    case ACT_CARPENTER: say("CLOSED.\nKnock on Wood\n9 to 6, Mon to Sat. Knocking won't help!"); break;
+    case ACT_CAFE: say("CLOSED.\nBean There Cafe\n7am to 9pm daily. Come back hungry!"); break;
     default: say("Town Hall\nOpen every day, 9am to 5pm. Lunch 12 to 1."); break;
     }
     (void)spot;
@@ -143,17 +143,17 @@ void tl_greet(uint8_t npc) BANKED {
     hud_flash(sbuf);
 }
 
-// A on a townhouse door: Ada and Milo live on the west lane, the mayor on the east
+// A on a townhouse door: Raza and Marcy live on the west lane, the mayor on the east
 void tl_house(void) BANKED {
     uint8_t west = G.px < 16, in;
     in = west ? (tl_spot(NPC_ADA) & HOME_BIT) || (tl_spot(NPC_MILO) & HOME_BIT) : (tl_spot(NPC_HOLLIS) & HOME_BIT);
     ui_speaker = 0;
     if (now_t() >= T(22, 0)) say("The lights are out. Better not wake anyone.");
-    else if (!in) say(west ? "Nobody's home. Ada and Milo must be out and about." : "Nobody's home. The mayor must be out and about.");
+    else if (!in) say(west ? "Nobody's home. Raza and Marcy must be out and about." : "Nobody's home. The mayor must be out and about.");
     else if (west) {
-        if (tl_spot(NPC_ADA) & HOME_BIT) { set_speaker("Ada"); say("(through the door) Cafe's closed, hon! Breakfast is at seven."); }
-        else { set_speaker("Milo"); say("(through the door) Mom says I can't come out! It's RAINING. I LOVE rain!"); }
-    } else { set_speaker("Hollis"); say("(through the door) The mayor is off duty! Come see me at the hall."); }
+        if (tl_spot(NPC_ADA) & HOME_BIT) { set_speaker("Raza"); say("(through the door) Bean There's closed, hon! Breakfast is at seven."); }
+        else { set_speaker("Marcy"); say("(through the door) I'm not allowed out! It's RAINING. I LOVE rain!"); }
+    } else { set_speaker("Joe"); say("(through the door) The mayor is off duty! Come see me at the hall."); }
     ui_speaker = 0;
 }
 
@@ -187,7 +187,7 @@ void friends_rows(void) BANKED {
 //   +k     a gift: S legendary seeds, g gold ore, w wood, E a full belly, j jam, $ gold, m a minnow
 static const char *const ev_rosa[4][16] = {
     {"!!", "@Oh! There you are, dear. I was sorting the old ledgers and look what fell out.",
-     "@One of your grandpa's order cards. 'Forty radish seeds. And one sunflower, for Rosa's window.'",
+     "@One of your grandpa's order cards. 'Forty radish seeds. And one sunflower, for Alyssa's window.'",
      "@Every spring, one sunflower. He never said why, and I never asked.", "!.",
      "?1What do you say?", "It was his way", "What a chore",
      "@...I suppose he did. I'll grow one this year. Maybe you'll bring me a sunflower someday, hm?",
@@ -197,7 +197,7 @@ static const char *const ev_rosa[4][16] = {
      "?1What do you say?", "Show me his page", "Nice bookkeeping",
      "@Here. His handwriting was terrible. Look at this one...",
      "@Somebody has to! Here, his first page...",
-     "GRosa, write it down: one sack of seed potatoes and a promise. I'll pay you in the spring.",
+     "GAlyssa, write it down: one sack of seed potatoes and a promise. I'll pay you in the spring.",
      "@He paid in summer. With interest. In pie.", "!h", 0},
     {"!.", "@Rain day, slow day. Can I tell you something, dear?",
      "@Years ago the store nearly closed. One long winter, nobody was buying.",
@@ -208,7 +208,7 @@ static const char *const ev_rosa[4][16] = {
      "@Ha! Not THAT many turnips, they're not.", "!h", 0},
     {"!h", "@I've been keeping something for you, dear. Your grandpa left it with me.",
      "@He said, 'When the kid's ready.' I've watched you work that land. I think you're ready.",
-     "+S", "NRosa hands you a jar of heirloom seeds, labelled in your grandpa's careful, crooked writing.",
+     "+S", "NAlyssa hands you a jar of heirloom seeds, labelled in your grandpa's careful, crooked writing.",
      "@Legendary seeds. The best he ever grew. Now go plant something wonderful...",
      "@...and come tell me about it. I'll put a sunflower in the window.", "!h", 0}};
 
@@ -219,8 +219,8 @@ static const char *const ev_brick[4][16] = {
      "@Good. Farmer's hands now. Your grandpa had hands like old saddle leather.",
      "@Don't. Hands like that mean you're doing it right.", "@...Keep it up.", 0},
     {"!!", "@Gah! Don't sneak up on a man.", "NBrick hides something behind his back. It's a little wooden bird.",
-     "@It's for June. Her birthday's coming. She talks about birds. A lot.", "fa", "@...Don't tell anyone.",
-     "?1What do you say?", "Secret's safe", "June'll LOVE it!",
+     "@It's for Andy. Birthday's coming. Andy talks about birds. A lot.", "fa", "@...Don't tell anyone.",
+     "?1What do you say?", "Secret's safe", "Andy'll LOVE it!",
      "@Hmph. Good. ...You think the wings are alright? Never mind. Forget I asked.",
      "@Shh! Keep your voice down! ...You really think so?", "!h", 0},
     {"!.", "@That hoe you started with. The old one of your grandpa's. I made it.",
@@ -230,7 +230,7 @@ static const char *const ev_brick[4][16] = {
      "?1What do you say?", "Teach me to forge", "It's a fine hoe",
      "@You? Ha! ...Maybe. Come by on a slow day. Wear boots.",
      "@It's a terrible hoe. ...But thanks.", "!h", 0},
-    {"!h", "@She hung the bird in her window. June. She smiled for a whole day.",
+    {"!h", "@Andy hung the bird in the window. Smiled for a whole day.",
      "@Thanks for keeping your mouth shut. Not many folks can.", "@Here. Made you something.",
      "+g", "NBrick drops five lumps of gold ore into your hands. They're still a little warm.",
      "@Enough for a gold tool. Bring it by and I'll make it sing.", "@...Friend.", 0}};
@@ -247,14 +247,14 @@ static const char *const ev_june[4][16] = {
      "?1What do you say?", "Let's rebuild it", "Storms are scary",
      "@You mean it? I've had the plans for years! I just needed someone to say it out loud.",
      "@They are. But a bandstand's just wood and nails. Wood and nails can go back up.", "!h", 0},
-    {"!.", "@The town fund doesn't cover lumber. Hollis says maybe next year. It's always next year.", "fa",
+    {"!.", "@The town fund doesn't cover lumber. Joe says maybe next year. It's always next year.", "fa",
      "?1What do you say?", "I'll help you", "Next year's close",
      "@...You would? Okay. Okay! Then I'm not giving up. Not this time.",
      "@Easy to say when you're not the one holding the plans.", "!h", 0},
-    {"!h", "@Guess what! Brick gave every hinge. Rosa sold seed packets for the fund.", "@Ada baked for the whole crew!",
+    {"!h", "@Guess what! Brick gave every hinge. Alyssa sold seed packets for the fund.", "@Raza baked for the whole crew!",
      "@It goes up this week. And the plaque says: 'Built by neighbours. Begun by old Stilwell...'",
      "@'...and finished by the new one.' That's you, by the way!",
-     "+w", "NJune presses a bundle of leftover lumber into your arms.",
+     "+w", "NAndy presses a bundle of leftover lumber into your arms.",
      "@For your farm. Build something that makes people dance.", "!h", 0}};
 
 static const char *const ev_ada[4][16] = {
@@ -264,18 +264,18 @@ static const char *const ev_ada[4][16] = {
      "@Liar. A sweet liar. Eat up.",
      "@HA! That's exactly what he said! Same face and everything. Oh, I needed that laugh.", "!h", 0},
     {"!.", "@I used to cook in the city, hon. Forty tables a night. Fancy plates.", "@I stopped tasting any of it.",
-     "@Then I came here. Milo grew up on tomatoes off the vine, and I remembered what food is for.",
-     "?1Ask her?", "What is it for?", "Sounds stressful",
+     "@Then I came here. Marcy grew up on tomatoes off the vine, and I remembered what food is for.",
+     "?1Ask Raza?", "What is it for?", "Sounds stressful",
      "@For people, hon. For sitting down together. Your vegetables taste like that.",
      "@It was. This is better. Busy, but better.", "!h", 0},
-    {"!.", "@Milo wants to be a farmer like you. He planted a bean in a teacup on my counter.",
-     "@It's... not doing great. And he checks it every hour. I can't bear to tell him.",
-     "?1What do you say?", "I'll help him", "Beans are tough",
-     "@Would you? Oh, hon. A little sun and less water, I bet. He'll listen to you.",
-     "@I know. I just hate watching him worry.", "!h", 0},
+    {"!.", "@Marcy wants to be a farmer like you. There's a bean planted in a teacup on my counter.",
+     "@It's... not doing great. And it gets checked every hour. I can't bear to say so.",
+     "?1What do you say?", "I'll help Marcy", "Beans are tough",
+     "@Would you? Oh, hon. A little sun and less water, I bet. Marcy'll listen to you.",
+     "@I know. I just hate watching Marcy worry.", "!h", 0},
     {"!h", "@New on the menu: the Stilwell Plate. Everything on it came from your fields.",
      "@People come in from the next valley for it now. Sit. First one's yours, forever.",
-     "+E", "NAda brings out a steaming plate. You eat every bite and feel brand new.",
+     "+E", "NRaza brings out a steaming plate. You eat every bite and feel brand new.",
      "+j", "@And take some jam for the road. Don't argue with me, hon.", 0}};
 
 static const char *const ev_hollis[4][16] = {
@@ -287,10 +287,10 @@ static const char *const ev_hollis[4][16] = {
      "@Ha! Flatterer. You'd make a fine politician.", "!n", 0},
     {"!n", "@We dug this fountain by hand, he and I. The summer the well ran dry.",
      "@I said it was too fancy for a little town. He said a town needs somewhere to make wishes.",
-     "GToss a coin, Hollis. Worst case, the fountain gets richer.",
+     "GToss a coin, Joe. Worst case, the fountain gets richer.",
      "?1What do you do?", "Toss a coin too", "Just listen",
-     "NTwo coins plink into the water. Hollis closes his eyes and smiles.",
-     "@...Thank you for letting an old man ramble.", "!h", 0},
+     "NTwo coins plink into the water. Joe shuts both eyes and smiles.",
+     "@...Thank you for letting an old mayor ramble.", "!h", 0},
     {"!.", "@I'm getting old, you know. Some days I wonder who'll keep the calendar when I'm gone.", "fa",
      "?1What do you say?", "The town will", "You'll outlive us",
      "@...Yes. Yes, I think they will. You've made this place feel young again.",
@@ -298,25 +298,25 @@ static const char *const ev_hollis[4][16] = {
     {"!h", "@Your grandpa and I buried a tin under the town tree. 'Open when the farm is back on its feet.'",
      "@I'd say it is. I dug it up this morning. There's a letter. It's for you.",
      "GIf you're reading this, the old place is green again. I knew it would be.",
-     "GBe good to the town. It was good to me.", "GAnd let Hollis win the Flower Show once. Love, Grandpa.",
+     "GBe good to the town. It was good to me.", "GAnd let Joe win the Flower Show once. Love, Grandpa.",
      "+$", "NTucked in the letter is a bundle of old banknotes. G2000!", "@...He never could keep a secret.", 0}};
 
 static const char *const ev_milo[4][16] = {
     {"!!", "@Hey! HEY! Is that dirt on your boots from your farm? Real farm dirt?",
-     "?1What do you do?", "Let him touch it", "It's just dirt",
+     "?1What do you do?", "Sure, touch it", "It's just dirt",
      "@Whoa. It's so... dirty. Best day ever!", "@It's NOT just dirt. It's FARM dirt. Geez.", "!n", 0},
-    {"!n", "@I made a kite! It's got a dog on it 'cause Mom says no real dog till I'm ten.",
+    {"!n", "@I made a kite! It's got a dog on it 'cause I can't have a real dog till I'm ten.",
      "@Will you hold the string while I run? Please please please?",
      "?1What do you do?", "Hold the string", "Maybe later",
-     "NYou hold the string. Milo runs. The dog kite climbs into the sky, and he whoops.",
+     "NYou hold the string. Marcy runs. The dog kite climbs into the sky. A whoop!",
      "@...Okay. Later. You promise?", "!h", 0},
-    {"!!", "@My bean SPROUTED! In the teacup! Mom says you helped.",
+    {"!!", "@My bean SPROUTED! In the teacup! I heard you helped.",
      "@I'm gonna name it Grandpa. 'Cause your grandpa was the best farmer. And so is my bean.",
      "?1What do you say?", "He'd love that", "Weird bean name",
      "@Yeah! Grandpa the bean. He's gonna be so tall.", "@It's a GREAT name. You're weird.", "!h", 0},
     {"!h", "@I drew your farm! That's you. That's the barn. That's me visiting. That's your dog.",
      "@When I'm bigger can I help on your farm? I'll work for cookies. Two cookies.",
-     "+m", "NMilo gives you a small fish wrapped in his drawing.",
+     "+m", "NMarcy gives you a small fish wrapped in a drawing.",
      "@That's my best fish ever. It's a minnow. It's still the best.", "!h", 0}};
 
 static const char *const *const events[NUM_NPC] = {
@@ -411,7 +411,7 @@ static uint8_t due(uint8_t npc) {   // the next unseen heart event, if it can ha
 
 uint8_t tl_heart_try(uint8_t npc, uint8_t walk_in) BANKED {
     uint8_t l = due(npc), a, px = G.px;
-    if (l == 0xFF) return 0;
+    if (l == 0xFF) return walk_in ? 0 : heart5_try(npc, actor_slot_npc(npc));   // hearts5.c: the fifth heart
     if (walk_in) {   // they spot you on the farm road and hurry over, to stand at your side
         a = actor_bring(npc, px + 6, 5);
         if (a != 0xFF) { actor_walk(a, px + 1, 5); actor_walk(a, px + 1, G.py); actor_face(a, D_LEFT); }

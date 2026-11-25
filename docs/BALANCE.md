@@ -51,7 +51,7 @@ picking, but planting and tending hundreds of tiles takes real minutes, and few 
 
 Strategies: **balanced** (the game's suggested path), **casual** (the same plan, relaxed), **crops**, **animals**,
 **mine**, **business**, and four exploit checks: **legend_rush** (legendary seeds the day they unlock, greenhouse,
-harvester), **gem_farmer** (all energy in the deep mine plus Ada's feasts), **trader_shops** (buy the traders' eggs,
+harvester), **gem_farmer** (all energy in the deep mine plus Raza's feasts), **trader_shops** (buy the traders' eggs,
 milk and honey to fill the Creamery, Bakery and Inn) and **cheap_kitchen** (the restaurant on cheap fish dishes).
 
 ### Validated against the ROM
@@ -72,7 +72,7 @@ business takings and farmhand wages must equal the model's `run_one x biz_mult` 
   about 15 gold a day and a plot of land paid for itself in under a week, so land, sprinklers and seeds compounded
   every couple of weeks.
 * **Gem farming trivialized it.** The deep mine paid 78 gold a point of energy with the gold hammer (41 with the
-  basic one), and Ada's 800-gold feast refilled the bar as often as you liked: the gem farmer finished the valley in
+  basic one), and Raza's 800-gold feast refilled the bar as often as you liked: the gem farmer finished the valley in
   **Year 1 Summer**.
 * **Legendary seeds + greenhouse + harvester.** A legendary regrower in the greenhouse never needed replanting and
   shipped 4.6x a common tile forever; it unlocked at G20000 earned (early summer of year 1).
@@ -108,7 +108,7 @@ business takings and farmhand wages must equal the model's `run_one x biz_mult` 
 | prosperity levels | 4 / 10 / 18 / 28 / 40 points | 4 / 12 / 22 / 34 / 48 | prosperity 5 now takes most of the facades or projects as well as all eight businesses |
 | traders' goods (invest.c) | 2x | 4x (`TRADER_MULT`) | dearer than any business can sell them for: they're for recipes and the Market Pantry, not for resale |
 | the mine (areas.c, items.c) | deep floors 78 g/energy (gold hammer) | 18.7 (12.4 with the basic hammer, 8-11 near the top) | fewer gem nodes and gold seams deep down, each rarer gem about a fifth as likely, ore and gems cheaper (copper 30 ... diamond 1200) |
-| food (cooking.c, town.c cafe, `G.ate`) | eat as much as you can pay for | dishes and Ada's meals restore at most one more full bar a day | energy can't be bought without limit and poured into the mine |
+| food (cooking.c, town.c cafe, `G.ate`) | eat as much as you can pay for | dishes and Raza's meals restore at most one more full bar a day | energy can't be bought without limit and poured into the mine |
 | kegs | 2000, 5 days | 1500, 3 days | 50-55 days payback on cheap produce instead of 100 |
 | preserves jars | 1500 | 1200 | ~44 days |
 | big sprinkler (decor.c) | 1200 | 800 | cheaper a tile than small sprinklers (33 vs 37.5) |
@@ -341,7 +341,7 @@ Gold earned during the season (per day) and what the farm holds at its end. `til
 
 ### Payback of each investment (after)
 
-Cost (gold, wood/stone at June's prices) over the extra gold a day it brings in the situation a player first meets it (stated in the row). Town projects pay back in prosperity (+4% business takings a level, traders, the town changing), not directly.
+Cost (gold, wood/stone at Andy's prices) over the extra gold a day it brings in the situation a player first meets it (stated in the row). Town projects pay back in prosperity (+4% business takings a level, traders, the town changing), not directly.
 
 | investment | cost | gain / day | payback (days) |
 |---|---:|---:|---:|
@@ -446,3 +446,34 @@ Cost (gold, wood/stone at June's prices) over the extra gold a day it brings in 
   prizes, request-board rewards, gifts from friends or Grandpa's letters (a few thousand gold a year).
 * The valley projects' goods are modelled roughly (a few tiles of the garden's crops, fishing and mining while a
   project needs them); strategies that never fish or mine deep don't finish the restoration in the model.
+
+## After the valley is restored (year 3 on)
+
+The model's balanced player finishes every letter, the fountain and prosperity 5 by Year 2 Winter, and until
+this pass nothing in the game read the year: year 3 was year 2 with more gold and nothing to spend it on
+(G757k unspent by Y3 Winter). Three things now grow with the year (`src/lategame.c`, `src/goals.c`):
+
+| | Rule | Numbers |
+|---|---|---|
+| Town Fund | Joe's INVEST board, at prosperity 5. Give gold toward the next level; it never runs out. | Level n+1 costs G100,000 + 50,000 x n. Each level adds 2 % to business takings and contract pay, up to 25 levels (+50 %); later levels still count in the review. |
+| Contracts | From year 2 the request board posts three bulk orders a season: a field crop, a farm good, something caught or dug. Deliver in parts; unfinished orders lapse with the season. | Tier t = (year - 2) + stars / 2, at most 8. Sizes 30 + 15t crop (winter 12 + 6t), 10 + 5t good, 6 + 3t wild. Pay 3 x the goods' price (x fund bonus). All three: a star and G5,000 x (t + 1). |
+| Yearly review | Grandpa writes every Spring 1, not only in year 2, and compares with last spring. | Score also counts 5 a fund level and 3 a star. Gift G score x 20 x (year - 1), the multiplier capped at 5. |
+
+Festival prizes are multiplied by the year (at most 5). The animal list is 36 long (was 12): six full barns or
+coops. None of this is in `tools/econ_model.py` yet.
+
+## Places to visit, and reasons to (Nov 2026)
+
+The day used to be cave, farm, beach, town, bed. Five more places, none of them farmable (`src/areas.c`):
+
+| Place | Way there | Daily |
+|---|---|---|
+| Old Woods | east end of Main Street | 7 forage spots (berries / herb / mushroom by season), the lily pond (koi `r < 24 + 8 x tier`, catfish after 6pm), the hollow log |
+| Granite Quarry | minecart at the mine entrance | 6 ore seams + 1 gem seam, hammer and 3 energy each |
+| High Pasture | minecart | 6 herb spots; 3 days of hay in the trough brings home a Highland animal (breed 3: double produce) |
+| Crossroads Market | minecart; open the 6th and 7th day of each week | any-season common seeds at 2x, 20 hay G300, 10 fertilizer G400, Highland cow 7000 / hen 1800 / sheep 8000 |
+| Shell Island | rowing boat at the end of the pier | 7 shell spots, ocean fish at rod tier + 3, the umbrella dig |
+
+Also: the Library's collection (`museum.c`: G1,500 an item for each finished group, G50,000 for all 70), a daily
+surprise (`daily.c`: trader 2 in 8, hot crop 2 in 8, bottle 1, fish run 1, nothing 2), letters and yearly wishes
+(`friends2.c`), a fifth heart scene (`hearts5.c`: 5 legendary seeds + G5,000). None of it is in the model yet.

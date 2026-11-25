@@ -448,7 +448,7 @@ static uint8_t seeds_page(void) {
             rmap[n] = rr;
             map[n++] = k;
         }
-    if (!n) { ui_dialog("You have no seeds. The General Store in town sells them by season."); return 0; }
+    if (!n) { ui_dialog("You have no seeds. Seeds & Needs in town sells them by season."); return 0; }
     {
         uint8_t hv = 0;
         ui_hover = &hv;

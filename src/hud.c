@@ -129,7 +129,7 @@ void after_step(void) BANKED {
         G.tips |= TIP_GOLD;
         k = bld_find(B_HOUSE);
         if (k != 0xFF && !(G.bld[k].flags & BF_LVL))
-            say("Tip: 1000G saved! June's Carpentry in town can rebuild your shack into a real house. More room, more energy!");
+            say("Tip: 1000G saved! Knock on Wood in town can rebuild your shack into a real house. More energy!");
         return;
     }
     if (scene != SCENE_FARM || !front_cell(&x, &y)) return;

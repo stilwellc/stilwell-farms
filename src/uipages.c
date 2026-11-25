@@ -83,7 +83,7 @@ void item_panel(uint8_t it, uint8_t q) BANKED {
     ui_text(4, 13, sbuf);
     if (IS_DISH(it)) { dish_line(it); ui_text(4, 14, sbuf); }   // cooking.c: what eating it does
     else ui_text(4, 14, item_kind(it));
-    s_clr(); s_add("Sells for G"); s_num(item_value(it, q), 0);
+    s_clr(); s_add("Sells for G"); s_num(sell_value(it, q), 0);
     ui_text(4, 15, sbuf);
 }
 
@@ -128,7 +128,7 @@ void status_panel(void) BANKED {
     for (k = 0; k < 7; k++) ui_char(3 + k, 6, k < segs ? GL_BAR_FULL : GL_BAR_EMPTY);
     ui_char(1, 8, GL_ICON_PIN);
     ui_text(3, 8, scene == SCENE_FARM ? "Farm" : scene == MAP_BARN ? "Barn" : scene == MAP_COOP ? "Coop" :
-                  IS_INTERIOR(scene) ? "Home" : scene == MAP_BEACH ? "Beach" : IS_MINE(scene) ? "Mine" : "Town");
+                  IS_INTERIOR(scene) ? "Home" : scene == MAP_BEACH ? "Beach" : scene == MAP_WOODS ? "Woods" : IS_NEW(scene) ? "Away" : IS_MINE(scene) ? "Mine" : "Town");
     if (G.mail) { ui_char(1, 9, GL_ICON_LETTER); ui_text(3, 9, "Mail!"); }
 }
 

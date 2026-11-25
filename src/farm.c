@@ -136,21 +136,17 @@ static void repair(uint8_t slot, const char *what, uint32_t g, uint16_t w, uint1
 
 // rarity: collect one animal's produce (rare and golden breeds give two; golden is always gold quality)
 static uint8_t collect_produce(Animal *a) {
-    uint8_t br = BREED(a), n = br ? 2 : 1;
-    uint8_t q = br == R_LEGEND ? 2 : a->happy > 200 ? 2 : a->happy > 120 ? 1 : 0;
-    inv_add(a->kind == A_COW ? I_MILK : a->kind == A_HEN ? I_EGG : I_WOOL, q, n);
-    a->flags &= ~AF_READY;
-    return n;
+    return anim_collect((uint8_t)(a - G.anim));   // animals.c: breed, size and sparkle all count
 }
 
 static void animals_building(uint8_t slot, uint8_t kind) {
     uint8_t k, n = 0, fed = 0, nohay = 0, got = 0, wool = 0;
     for (k = 0; k < MAX_ANIMALS; k++) {
         Animal *a = &G.anim[k];
-        if (a->home != slot || (a->kind != kind && !(kind == A_COW && a->kind == A_SHEEP))) continue;
+        if (a->kind == 0xFF || a->home != slot) continue;
         n++;
         if (a->flags & AF_READY) {
-            if (a->kind == A_SHEEP) wool += collect_produce(a);
+            if ((a->kind % 3) == A_SHEEP) wool += collect_produce(a);
             else got += collect_produce(a);
         }
         if (!(a->flags & AF_FED)) {
@@ -159,13 +155,13 @@ static void animals_building(uint8_t slot, uint8_t kind) {
         }
     }
     if (!n) {
-        say(kind == A_COW ? "An empty barn. Buy cows or sheep at the General Store in town!" : "An empty coop. Buy hens at the General Store in town!");
+        say(kind == A_COW ? "An empty barn. Buy cows or sheep at Seeds & Needs in town!" : "An empty coop. Buy hens at Seeds & Needs in town!");
         return;
     }
     if (got || wool) {
         s_clr(); if (!got || !wool) s_add("Got ");   // "12 Milk, 3 Wool!" fits the toast; "Got " would not
-        if (got) { s_num(got, 0); s_add(kind == A_COW ? " Milk" : " Eggs"); }
-        if (wool) { if (got) s_add(", "); s_num(wool, 0); s_add(" Wool"); }
+        if (got) { s_num(got, 0); s_add(kind == A_COW ? " milk" : " eggs"); }
+        if (wool) { if (got) s_add(", "); s_num(wool, 0); s_add(" more"); }
         s_ch('!');
         sfx(SFX_COIN); hud_flash(sbuf);
     }
@@ -201,7 +197,7 @@ static void struct_act(uint8_t slot) {
         uint32_t total = 0;
         uint8_t it, q;
         for (it = 0; it < NUM_ITEMS; it++)
-            for (q = 0; q < 3; q++) total += (uint32_t)G.inv[it][q] * item_value(it, q);
+            for (q = 0; q < 3; q++) total += (uint32_t)G.inv[it][q] * sell_value(it, q);
         total = (total * 4) / 5;
         if (!total) { say("Your farm stand. Sell your goods here anytime for 80% of their value."); break; }
         s_clr(); s_add("Sell everything here now for G"); s_num(total, 0); s_ch('?');
@@ -326,7 +322,7 @@ static void use_tool(uint16_t i, uint8_t x, uint8_t y) {
         if (s && !G.seeds[s][rr])   // this packet ran out: fall back to another rarity of the same crop
             for (rr = 0; rr < NUM_RARITY - 1 && !G.seeds[s][rr]; rr++) ;
         G.seed_rar = rr;
-        if (!s || !G.seeds[s][rr]) { say("You're out of those seeds. Buy more at the General Store in town."); return; }
+        if (!s || !G.seeds[s][rr]) { say("You're out of those seeds. Buy more at Seeds & Needs in town."); return; }
         if (crops[s].season != G.season && !green_ok()) {
             s_clr(); s_add(items[s - 1].name); s_add(" won't grow in "); s_add(season_name[G.season]); s_ch('.');
             say(sbuf);
@@ -340,7 +336,7 @@ static void use_tool(uint16_t i, uint8_t x, uint8_t y) {
     }
     case T_FERT:
         if (c != C_SOIL || (W_A1[i] & SOIL_FERT)) return;
-        if (!G.fert) { say("You're out of fertilizer. The General Store sells it."); return; }
+        if (!G.fert) { say("You're out of fertilizer. Seeds & Needs sells it."); return; }
         G.fert--;
         W_A1[i] |= SOIL_FERT;
         fx_show(SPR_SPARKLE, SPR_SPARKLE_PAL, x, y);
@@ -359,7 +355,7 @@ static void use_tool(uint16_t i, uint8_t x, uint8_t y) {
             redraw_cell(x, y);
             G.wood += 6; gain_res("Wood", 6);
         } else if (c == C_LOG) {
-            if (!G.tier[TT_AXE]) { say("This log is too big for your rusty axe. The blacksmith in town can upgrade it."); return; }
+            if (!G.tier[TT_AXE]) { say("This log is too big for your rusty axe. The Grumpy Anvil in town can upgrade it."); return; }
             if (!strike(i, x, y, 4, G.tier[TT_AXE], SFX_CHOP)) return;
             clear_to_grass(i, x, y, SFX_CHOP);
             G.wood += 12; gain_res("Wood", 12);
@@ -371,13 +367,13 @@ static void use_tool(uint16_t i, uint8_t x, uint8_t y) {
             clear_to_grass(i, x, y, SFX_HIT);
             G.stone += 2; gain_res("Stone", 2);
         } else if (c == C_BOULDER) {
-            if (!G.tier[TT_HAMMER]) { say("This boulder won't budge. The blacksmith in town can upgrade your hammer."); return; }
+            if (!G.tier[TT_HAMMER]) { say("This boulder won't budge. The Grumpy Anvil in town can upgrade your hammer."); return; }
             if (!strike(i, x, y, 4, G.tier[TT_HAMMER], SFX_HIT)) return;
             clear_to_grass(i, x, y, SFX_HIT);
             G.stone += 10; gain_res("Stone", 10);
         } else if (c == C_ORE) {
             uint8_t k = W_A1[i] & 3, need = k == 0 ? 0 : k == 1 ? 1 : 2;
-            if (G.tier[TT_HAMMER] < need) { say("This ore is too hard. Upgrade your hammer at the blacksmith."); return; }
+            if (G.tier[TT_HAMMER] < need) { say("This ore is too hard. Upgrade your hammer at the Grumpy Anvil."); return; }
             if (!spend_energy(5)) return;
             W_CELL[i] = C_SAND; W_A1[i] = 0;
             redraw_cell(x, y);
@@ -417,10 +413,10 @@ void farm_act(void) BANKED {
             Animal *m = &G.anim[an];
             m->flags |= AF_PET;
             fx_show(SPR_HEART, SPR_HEART_PAL, x, y);
-            if (m->kind == A_SHEEP && (m->flags & AF_READY)) {   // shear right here in the field
-                uint8_t q = BREED(m) == R_LEGEND ? 2 : m->happy > 200 ? 2 : m->happy > 120 ? 1 : 0;
+            if ((m->kind % 3) == A_SHEEP && (m->flags & AF_READY)) {   // shear (or take the truffle) right here in the field
+                uint8_t yv = anim_yield(an);
                 m->flags &= ~AF_READY;
-                gain_item(I_WOOL, q, BREED(m) ? 2 : 1);
+                gain_item(anim_item(an), yv >> 4, yv & 15);
                 return;
             }
             s_clr(); s_add(m->name);
@@ -444,7 +440,7 @@ void farm_act(void) BANKED {
             uint32_t total = 0;
             uint8_t it, q;
             for (it = 0; it < NUM_ITEMS; it++)
-                for (q = 0; q < 3; q++) total += (uint32_t)G.inv[it][q] * item_value(it, q);
+                for (q = 0; q < 3; q++) total += (uint32_t)G.inv[it][q] * sell_value(it, q);
             if (!total) { say("The shipping bin. Goods put in here are sold overnight."); return; }
             s_clr(); s_add("Ship all your goods for G"); s_num(total, 0); s_ch('?');
             if (!ui_yesno(sbuf)) return;

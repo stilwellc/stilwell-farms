@@ -1,4 +1,4 @@
-// Stilwell Farms -- the Valley Restoration: Mayor Hollis's board at town hall.  Six projects take
+// Stilwell Farms -- the Valley Restoration: Mayor Joe's board at town hall.  Six projects take
 // donations of goods plus gold; each one finished changes the town for good (restored art drawn over
 // the town map by valley_mt(), like biz_mt), gives a reward, and brings a letter from Grandpa.  The
 // last one needs the other five and ends in a celebration (the game goes on afterwards).  (banked)
@@ -43,7 +43,7 @@ static const char *const proj_done[NUM_PROJ] = {
     "Look at the park! The old trees are heavy with fruit again.",
     "The streams run clear! Rarer fish will bite all over the valley from now on.",
     "The lamps on the square are glowing! And Star Night prizes will be twice as big now.",
-    "The market's full again! The cafe sent over a very special recipe for you.",
+    "The market's full again! Bean There sent over a very special recipe for you.",
     "The fountain is finished... and the whole town is gathering in the square!"};
 static const char *const letters[NUM_PROJ] = {
     "The town garden is growing again. I planted the first beds there with your grandma.",
@@ -107,14 +107,14 @@ static void finale(void) {
     enter_scene(MAP_TOWN, 15, 14, D_UP);   // everyone meets at the new fountain
     music_play(MUS_FESTIVAL);
     sparkle_wait(120);
-    set_speaker("Hollis");
+    set_speaker("Joe");
     say("Friends, neighbours! Look at our valley! The garden, the orchard, the lamps, the market...");
     say("None of it would be here without the farmer from the Stilwell place. Three cheers!");
-    set_speaker("Rosa"); say("Hip hip... HOORAY! Your grandpa would be over the moon.");
+    set_speaker("Alyssa"); say("Hip hip... HOORAY! Your grandpa would be over the moon.");
     set_speaker("Brick"); say("Hmph. Not bad, farmer. Not bad at all.");
-    set_speaker("June"); say("I'm putting your name on the fountain. In big letters!");
-    set_speaker("Ada"); say("Supper's on me tonight. Every night, if you like!");
-    set_speaker("Milo"); say("When I grow up I'm gonna fix up a whole valley too!");
+    set_speaker("Andy"); say("I'm putting your name on the fountain. In big letters!");
+    set_speaker("Raza"); say("Supper's on me tonight. Every night, if you like!");
+    set_speaker("Marcy"); say("When I grow up I'm gonna fix up a whole valley too!");
     ui_speaker = 0;
     sparkle_wait(90);
     set_speaker("Grandpa");
@@ -157,7 +157,7 @@ static void complete(uint8_t p) {
     redraw_rect(0, 0, 32, 24);   // the town under the menus changes now
     ui_end();
     music_play(MUS_JINGLE_FANFARE);
-    set_speaker("Hollis");
+    set_speaker("Joe");
     say(proj_done[p]);
     ui_speaker = 0;
     music_for_scene();
@@ -189,7 +189,7 @@ static void proj_panel(uint8_t p, uint8_t k) {   // k = slot under the cursor, V
 
 static void project(uint8_t p) {
     uint8_t n, k, r, map[VP_SLOTS + 1], hv = 0, it, q;
-    set_speaker("Hollis");
+    set_speaker("Joe");
     say(proj_pitch[p]);
     ui_speaker = 0;
     while (!(G.valley_done & (1 << p))) {
@@ -247,7 +247,7 @@ static void project(uint8_t p) {
     }
 }
 
-// ---------------------------------------------------------------- the board (town hall, via Hollis)
+// ---------------------------------------------------------------- the board (town hall, via Joe)
 static void board_panel(uint8_t p) {
     uint8_t k, x = 2, it;
     ui_panel(0, 13, 20, 4);
@@ -268,7 +268,7 @@ static void board_panel(uint8_t p) {
 
 void valley_board(void) BANKED {
     uint8_t p, r, hv = 0;
-    set_speaker("Hollis");
+    set_speaker("Joe");
     if (!(G.cook_flags & 2)) {
         G.cook_flags |= 2;
         say("Say, farmer... this valley was the pride of the county once. The garden, the orchard...");
@@ -295,9 +295,9 @@ void valley_board(void) BANKED {
         if (r == 0xFF) return;
         hv = r;
         if (G.valley_done & (1 << r)) {
-            set_speaker("Hollis"); say(proj_done[r]); ui_speaker = 0;
+            set_speaker("Joe"); say(proj_done[r]); ui_speaker = 0;
         } else if (!unlocked(r)) {
-            set_speaker("Hollis"); say("That's the big one. Let's finish the other five projects first!"); ui_speaker = 0;
+            set_speaker("Joe"); say("That's the big one. Let's finish the other five projects first!"); ui_speaker = 0;
         } else project(r);
     }
 }

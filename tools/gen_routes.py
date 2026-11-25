@@ -15,11 +15,11 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 # name, x, y   (each must be a walkable town cell; keep shop doors clear of the cells players stand on)
 SPOTS = [
-    ('STORE', 12, 4),     # Rosa's counter, beside the General Store door (players use x 10-11)
+    ('STORE', 12, 4),     # Alyssa's counter, beside the General Store door (players use x 10-11)
     ('SMITH', 5, 4),      # Brick's forge (players use x 2-4)
-    ('CAFE', 22, 4),      # Ada's cafe (players use x 19-21)
-    ('CARP', 29, 4),      # June's carpentry (players use x 26-28)
-    ('HALL', 18, 9),      # Mayor Hollis at the town hall steps (players use x 14-17)
+    ('CAFE', 22, 4),      # Raza's cafe (players use x 19-21)
+    ('CARP', 29, 4),      # Andy's carpentry (players use x 26-28)
+    ('HALL', 18, 9),      # Mayor Joe at the town hall steps (players use x 14-17)
     ('FOUNT_W', 13, 13),  # plaza, west of the fountain
     ('FOUNT_E', 18, 13),  # plaza, east of the fountain
     ('CAFE_T1', 19, 5),   # cafe terrace seats
@@ -32,8 +32,8 @@ SPOTS = [
     ('PARK_C', 15, 17),   # park path
     ('GARDEN', 4, 11),    # the town vegetable garden gate
     ('ORCHARD', 26, 10),  # under the east orchard trees
-    ('HOME_A', 4, 14),    # Ada and Milo's house door
-    ('HOME_B', 28, 14),   # Mayor Hollis's house door
+    ('HOME_A', 4, 14),    # Raza and Marcy's house door
+    ('HOME_B', 28, 14),   # Mayor Joe's house door
     ('BOARD', 12, 9),     # beside the notice board
     ('ROAD', 17, 2),      # beside the farm road (clear of where you walk in)
     ('MARKET', 11, 8),    # under the market tent

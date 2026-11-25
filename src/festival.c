@@ -26,8 +26,9 @@ static void wait_frames_spr(uint8_t n) { while (n--) { update_sprites(); wait_vb
 // ---------------------------------------------------------------- results + prizes
 static void finish(uint8_t se, uint16_t score) {
     uint8_t bit = 1 << se, c = next_crop[se];
+    uint32_t prize;
     if (score > G.fest_best[se]) G.fest_best[se] = score > 255 ? 255 : (uint8_t)score;
-    set_speaker("Hollis");
+    set_speaker("Joe");
     if (score < need[se]) {
         s_clr(); s_add("A fine try! You needed "); s_num(need[se], 0); s_add(" to take first prize. Have another go!");
         say(sbuf);
@@ -36,9 +37,10 @@ static void finish(uint8_t se, uint16_t score) {
     }
     music_play(MUS_JINGLE_FANFARE);
     say("We have a winner! First prize goes to our very own farmer!");
-    G.gold += prize_gold[se];
+    prize = (uint32_t)prize_gold[se] * (G.year > 5 ? 5 : G.year ? G.year : 1);   // the prize grows with the fair, year by year
+    G.gold += prize;
     G.seeds[c][R_RARE] = G.seeds[c][R_RARE] > 252 ? 255 : G.seeds[c][R_RARE] + 3;
-    s_clr(); s_add("You win G"); s_num(prize_gold[se], 0); s_add(" and 3 rare "); s_add(items[c - 1].name); s_add(" seeds!");
+    s_clr(); s_add("You win G"); s_num(prize, 0); s_add(" and 3 rare "); s_add(items[c - 1].name); s_add(" seeds!");
     ui_speaker = 0;
     say(sbuf);
     if (!(G.ribbons & bit)) {
@@ -89,7 +91,7 @@ void festival_tick(void) BANKED {
     if (!egg_tmr || egg_got >= EGGS) {
         fest_on = 0;
         hud_draw();
-        set_speaker("Hollis");
+        set_speaker("Joe");
         s_clr();
         if (egg_got >= EGGS) s_add("Every last egg! ");
         else s_add("Time's up! ");
@@ -126,7 +128,7 @@ static void koi_derby(void) {
     uint8_t cast, t, wait, r, cm, early;
     uint16_t total = 0;
     say("The Koi Derby! Five casts into the fountain. Strike the moment a koi bites: quick hands land big fish.");
-    say("Milo's record is 120 cm, all five together. Catch and release, of course!");
+    say("Marcy's record is 120 cm, all five together. Catch and release, of course!");
     ui_speaker = 0;
     enter_scene(MAP_TOWN, 15, 13, D_UP);   // to the fountain's edge
     for (cast = 0; cast < 5; cast++) {
@@ -223,18 +225,18 @@ static void judging(void) {
     if (it == I_PUMPKIN && giant) pts += 10;
     ui_speaker = 0;
     pts += polish();
-    set_speaker("Ada");
+    set_speaker("Raza");
     say(q == 2 ? "Oh my. Look at the shine on it! Gold star quality, hon." : q ? "A fine, healthy one. Nicely grown!" : "Hmm. Honest and wholesome.");
-    set_speaker("Rosa");
+    set_speaker("Alyssa");
     say(items[it].price >= 200 ? "And the SIZE of it! I've never sold seeds that grew this big." : "Small, but you can taste the care in it.");
     if (it == I_PUMPKIN && giant) { set_speaker("Brick"); say("Heard you grew a GIANT one. Hmph. Extra point for nerve."); }
-    set_speaker("Hollis");
-    s_clr(); s_add("The judges award... "); s_num(pts, 0); s_add(" points! June's sweet corn has 69. Brick's lumpy beet, 41.");
+    set_speaker("Joe");
+    s_clr(); s_add("The judges award... "); s_num(pts, 0); s_add(" points! Andy's sweet corn has 69. Brick's lumpy beet, 41.");
     say(sbuf);
     finish(SEASON_FALL, pts);
 }
 
-// ---------------------------------------------------------------- Winter: snowball fight with Milo
+// ---------------------------------------------------------------- Winter: snowball fight with Marcy
 static void fort_draw(uint8_t k, uint8_t up) {
     uint8_t x = 1 + k * 6, i, j;
     if (up) ui_put_struct(x + 1, 4, ST_PORTRAIT_MILO, 2, 2);
@@ -243,8 +245,8 @@ static void fort_draw(uint8_t k, uint8_t up) {
 
 static void snowball(void) {
     uint8_t round, hits = 0, k, t, up, got, i;
-    say("Star Night snowball fight! Milo pops up behind the snow forts. Throw with LEFT, UP or RIGHT!");
-    say("Hit him 8 times out of 12 to win. He's quick, so stay sharp!");
+    say("Star Night snowball fight! Marcy pops up behind the snow forts. Throw with LEFT, UP or RIGHT!");
+    say("Land 8 hits out of 12 to win. Marcy's quick, so stay sharp!");
     ui_speaker = 0;
     ui_begin();
     ui_box(0, 0, 20, 12);
@@ -278,19 +280,19 @@ static void snowball(void) {
         ui_text(2 + k * 6, 6, "      ");
     }
     ui_end();
-    set_speaker("Milo");
+    set_speaker("Marcy");
     s_clr(); s_num(hits, 0); s_add(hits >= 8 ? " hits?! No fair! You're like a snowball MACHINE." : " hits! Ha! I'm the snowball champion of the valley!");
     say(sbuf);
-    set_speaker("Hollis");
+    set_speaker("Joe");
     say("And now, everyone, light your lanterns... and let them go. Merry Star Night!");
     finish(SEASON_WINTER, hits);
 }
 
-// ---------------------------------------------------------------- Hollis runs the festival from the hall steps
+// ---------------------------------------------------------------- Joe runs the festival from the hall steps
 void festival_hall(void) BANKED {
     uint8_t se = G.season & 3, bit = 1 << se;
     if (G.fest_year != G.year) { G.fest_year = G.year; G.fest_done = 0; }
-    set_speaker("Hollis");
+    set_speaker("Joe");
     s_clr(); s_add("Welcome to the "); s_add(fest_names[se]); s_ch('!');
     say(sbuf);
     if (se == SEASON_SPRING && !(G.fest_done & 0x10)) {   // the old Flower Show garden tour still runs every spring
@@ -325,7 +327,7 @@ void festival_hall(void) BANKED {
         ui_speaker = 0;
         return;
     }
-    set_speaker("Hollis");
+    set_speaker("Joe");
     if (se == SEASON_SPRING) egg_start();
     else if (se == SEASON_SUMMER) koi_derby();
     else if (se == SEASON_FALL) judging();
