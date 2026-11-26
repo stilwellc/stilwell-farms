@@ -1,0 +1,31 @@
+# Pinecrest: by stagecoach. Snow all year (main.c forces the winter palette). Long nights: preserves and hot dishes sell best.
+map PINECREST set=FARM w=16 h=14 music=SNOWY
+key # FOREST block
+key P PINE block
+key . GRASS walk
+key , GRASS2 walk
+key = PATH walk
+key r ROCK block
+key l LOG block
+key s STUMP block
+key x MINE_CRATE block
+key L LAMP block
+grid
+################
+#PP...P..P...PP#
+#P..,.......,.P#
+#......x.......#
+#P..L.....L...P#
+#..............#
+#.P..,....r..P.#
+#......s.......#
+#P..........,.P#
+#..,.....l.....#
+#P.....==.....P#
+#PP....==....PP#
+#PPP...==...PPP#
+#######==#######
+place REG_CABIN 10 5
+place REG_FROZEN_WELL 3 5
+warp 7 13 MARKET 8 9 up
+warp 8 13 MARKET 8 9 up

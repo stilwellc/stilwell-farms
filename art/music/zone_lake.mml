@@ -1,0 +1,29 @@
+# key C major  meter 6/8 (a bar is 12 sixteenths, two slow beats)
+# Lakeshore: a lazy boat song. Rising and falling 8th arpeggios roll under a long-note
+# line, the bass rocks root to fifth once a bar. No drums.
+# The file is named zone_* so it sorts after winter.mml and the older song ids stay put.
+# A  (1-8):   C  Am F  G  | C  Em F  G
+# B  (9-16):  Am F  C  G  | Am F  Dm G
+# A' (17-24): C  Am F  G  | F  C  Dm G7   (the G7 bar leans back onto bar 1)
+song LAKE tempo=9 loop=yes
+ch1 duty=2 env=87
+o5 e4. g4. | o5 a4. e4 c8 | o5 f4. a4 f8 | o5 d2. |
+o5 e4. g4 o6 c8 | o5 b4. g4 e8 | o5 a4. f4 e8 | o5 d4. g4. |
+o6 c4. o5 a4 e8 | o5 f4. a4. | o5 g4. e4 c8 | o5 d4. o4 b4. |
+o5 c4. e4 a8 | o5 a4. f4 a8 | o5 f4. d4 f8 | o5 g2. |
+o5 e4. g4. | o5 a4. e4 c8 | o5 f4. a4 f8 | o5 g4. b4 g8 |
+o5 a4. o6 c4 o5 a8 | o5 g4. e4 g8 | o5 f4. a4 f8 | o5 d4. f4 d8 |
+ch2 duty=1 env=43
+o4 c8 e8 g8 o5 c8 o4 g8 e8 | o3 a8 o4 c8 e8 a8 e8 c8 | o3 a8 o4 c8 f8 a8 f8 c8 | o3 b8 o4 d8 g8 b8 g8 d8 |
+o4 c8 e8 g8 o5 c8 o4 g8 e8 | o3 b8 o4 e8 g8 b8 g8 e8 | o3 a8 o4 c8 f8 a8 f8 c8 | o3 b8 o4 d8 g8 b8 g8 d8 |
+o3 a8 o4 c8 e8 a8 e8 c8 | o3 a8 o4 c8 f8 a8 f8 c8 | o4 c8 e8 g8 o5 c8 o4 g8 e8 | o3 b8 o4 d8 g8 b8 g8 d8 |
+o3 a8 o4 c8 e8 a8 e8 c8 | o3 a8 o4 c8 f8 a8 f8 c8 | o3 a8 o4 d8 f8 a8 f8 d8 | o3 b8 o4 d8 g8 b8 g8 d8 |
+o4 c8 e8 g8 o5 c8 o4 g8 e8 | o3 a8 o4 c8 e8 a8 e8 c8 | o3 a8 o4 c8 f8 a8 f8 c8 | o3 b8 o4 d8 g8 b8 g8 d8 |
+o3 a8 o4 c8 f8 a8 f8 c8 | o4 c8 e8 g8 o5 c8 o4 g8 e8 | o3 a8 o4 d8 f8 a8 f8 d8 | o3 b8 o4 d8 f8 g8 f8 d8 |
+ch3 wave=soft vol=2
+o3 c4. g4. | o2 a4. o3 e4. | o2 f4. o3 c4. | o2 g4. o3 d4. |
+o3 c4. g4. | o2 e4. b4. | o2 f4. o3 c4. | o2 g4. o3 d4. |
+o2 a4. o3 e4. | o2 f4. o3 c4. | o3 c4. g4. | o2 g4. o3 d4. |
+o2 a4. o3 e4. | o2 f4. o3 c4. | o3 d4. o2 a4. | o2 g4. o3 d4. |
+o3 c4. g4. | o2 a4. o3 e4. | o2 f4. o3 c4. | o2 g4. o3 d4. |
+o2 f4. o3 c4. | o3 c4. g4. | o3 d4. o2 a4. | o2 g4. o2 b4. |

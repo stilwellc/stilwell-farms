@@ -1,0 +1,36 @@
+# Stonegate: by stagecoach. Old walls, an arch and a statue nobody can name. Collectors here pay most for the finest of anything.
+map STONEGATE set=FARM w=16 h=14 music=SPRING
+key # FOREST block
+key . GRASS walk
+key , GRASS2 walk
+key = PATH walk
+key r ROCK block
+key o BOULDER block
+key S STATUE block
+key A ARCH block
+key w WELL block
+key x MINE_CRATE block
+key L LAMP block
+grid
+################
+#o.r...,....r.o#
+#......A.......#
+#.r..=====...,.#
+#....=...=.....#
+#.L..=.S.=..L..#
+#....=...=.....#
+#.,..=====..x..#
+#......=.......#
+#o.....=....w.r#
+#......==......#
+#r.....==...,.o#
+#o.r...==....ro#
+#######==#######
+place REG_STATUE_HEADLESS 7 4
+place REG_COLUMN 3 1
+place REG_COLUMN 11 1
+place REG_COLUMN_BROKEN 13 5
+place REG_RUIN_WALL 13 4
+place REG_RUIN_WALL 14 4
+warp 7 13 MARKET 8 9 up
+warp 8 13 MARKET 8 9 up

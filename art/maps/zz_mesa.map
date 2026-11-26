@@ -1,0 +1,30 @@
+# Sunbake Mesa: by stagecoach. Sand, cliffs and bare rock. Nothing grows and nothing swims: fish and fruit sell for double.
+map MESA set=FARM w=16 h=14 music=DESERT
+key c CLIFF block
+key . SAND walk
+key : BEACH_SAND2 walk
+key r BEACH_ROCK block
+key x MINE_CRATE block
+key = DIRT walk
+grid
+cccccccccccccccc
+c..:......:....c
+c....r.........c
+c.:.......cc...c
+c.........cc.:.c
+c...x..........c
+c.......:......c
+c.cc.........r.c
+c.cc...:.......c
+c..........:...c
+c..:...==......c
+c......==....r.c
+c.r....==......c
+ccccccc==ccccccc
+place REG_MESA_ARCH 10 7
+place REG_CACTUS 6 2
+place REG_CACTUS 13 10
+place REG_CACTUS 2 10
+place REG_DRY_PUMP 9 2
+warp 7 13 MARKET 8 9 up
+warp 8 13 MARKET 8 9 up

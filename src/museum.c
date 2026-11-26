@@ -16,7 +16,7 @@ BANKREF(museum_act)
 static const char *const group_name[NGROUP] = {"crops", "fruit", "farm goods", "wild finds", "river fish", "ores",
                                               "gems", "preserves", "sea fish", "beach finds", "dishes"};
 
-static uint8_t group_of(uint8_t it) {
+uint8_t item_group(uint8_t it) BANKED {
     if (it < I_APPLE) return 0;
     if (it < I_MILK) return 1;
     if (it <= I_HONEY || it == I_WOOL) return 2;
@@ -43,7 +43,7 @@ static void group_check(uint8_t g) {   // the group just finished? thank the far
     uint32_t gift;
     if (G.museum_sets & (1U << g)) return;
     for (k = 0; k < NUM_ITEMS; k++)
-        if (group_of(k) == g) { n++; if (!donated(k)) miss = 1; }
+        if (item_group(k) == g) { n++; if (!donated(k)) miss = 1; }
     if (miss) return;
     G.museum_sets |= 1U << g;
     gift = 1500UL * n;
@@ -99,7 +99,7 @@ static void donate(void) {
         s_clr(); s_add("A fine "); s_add(items[it].name); s_add("! It goes on the shelf with your name on the card. ");
         s_num(count_all(), 0); s_add(" of "); s_num(NUM_ITEMS, 0); s_add(" now.");
         say(sbuf);
-        group_check(group_of(it));
+        group_check(item_group(it));
         page = 0;
     }
 }

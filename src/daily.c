@@ -33,6 +33,8 @@ void daily_roll(void) BANKED {
 // twice the price for today's hot item (the bin, the stand and the shops ask here; farmhands and businesses don't)
 uint16_t sell_value(uint8_t it, uint8_t q) BANKED {
     uint16_t v = item_value(it, q);
+    uint8_t r = office_rate(it);                // regions.c: your offices away sell what you ship from home
+    if (r > 10) v = (uint16_t)((uint32_t)v * r / 10);
     return (G.daily == D_HOT && it == G.daily_arg) ? v * 2 : v;
 }
 
@@ -49,6 +51,7 @@ static void tell(void) {   // -> sbuf: today's news, or empty
 void daily_report(void) BANKED { tell(); if (sbuf[0]) say(sbuf); }
 
 void daily_tv(void) BANKED {
+    if (G.seen[0] | G.seen[1]) { regions_tv(); carry_tv(); }   // regions2.c: once you have been out in the country
     tell();
     if (!sbuf[0]) return;
     set_speaker("TV");

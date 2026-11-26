@@ -690,6 +690,7 @@ void world_overnight(uint8_t passed_out) BANKED {
     G.talked = G.gifted = 0;
     daily_roll();      // daily.c: today's surprise
     friends_overnight();   // friends2.c: letters for new hearts
+    regions_night();       // regions2.c: flooded markets ease
     // farmhands: wages come out of gold first, then they water/harvest/ship/tend/weed
     staff_overnight();
     // 8. money, rest, reset

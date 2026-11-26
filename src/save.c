@@ -279,7 +279,8 @@ static void anims_in(const uint8_t *q, uint8_t n) {
 
 // saves older than v6 keep their animals in anim_v5, and know nothing of the years after the valley
 static void anim_carry(void) {
-    anims_in(G.anim_v5, V5_ANIMALS);
+    anims_in(G.region_taken, V5_ANIMALS);   // (the block that is region_taken .. more8 now)
+    memset(G.region_taken, 0, V5_ANIMALS * OLD_ANIMAL);
     memset(&G.review_year, 0, offsetof(GameState, checksum) - offsetof(GameState, review_year));
     if (G.goals & (1UL << 31)) G.review_year = G.year;   // this year's review was already read
 }
@@ -296,20 +297,23 @@ static void migrate_56(const uint8_t *p, uint8_t v) {
         memcpy(&G.review_year, q, O_LD1);
         memcpy(&G.museum_sets, q + O_LD1, O_LD2);
         G.herd[0] = G.herd[1] = G.herd[2] = G.herd[3] = G.herd_done = 0;   // (were spare, and zero; be sure)
+        memset(G.region_taken, 0, V5_ANIMALS * OLD_ANIMAL);
     }
 }
 
-// 0 none, 2 old v2 farm, 3 .. 6 a v3 .. v6 save (carried forward on load), 7 current. Leaves bank 0 mapped.
+// 0 none, 2 old v2 farm, 3 .. 7 a v3 .. v7 save (carried forward on load), 8 current. Leaves bank 0 mapped.
+// (v7 is v8 with the old animal block not yet zeroed.)
 static uint8_t check(uint8_t slot) {
     const uint8_t *p = SLOT(slot);
     const GameState *s = (const GameState *)p;
     SWITCH_RAM(0);
     if (slot || s->magic != SAVE_MAGIC) return 0;   // one slot
-    if (s->version == SAVE_VERSION && s->checksum == sum(p, sizeof(GameState) - 2)) {
+    if ((s->version == SAVE_VERSION || s->version == 7) && s->checksum == sum(p, sizeof(GameState) - 2)) {
         uint16_t ws = s->world_sum;
+        uint8_t v = s->version;
         ws = world_xfer(0, WB_SAVED) == ws;
         SWITCH_RAM(0);
-        return ws ? 7 : 0;
+        return ws ? v : 0;
     }
     if (old_ok(p, 6, V6_SIZE) || old_ok(p, 5, V5_SIZE)) {
         uint16_t ws = p[O_WSUM] | (p[O_WSUM + 1] << 8);
@@ -421,8 +425,9 @@ static void migrate_old(const uint8_t *p, uint8_t v) {
 
 uint8_t save_load(uint8_t slot) BANKED {
     uint8_t v = check(slot);
-    if (v == 7) {
+    if (v >= 7) {
         memcpy(&G, SLOT(slot), sizeof(G));
+        if (v == 7) { memset(G.region_taken, 0, V5_ANIMALS * OLD_ANIMAL); G.version = SAVE_VERSION; }
         world_xfer(WB_LIVE, WB_SAVED);
     } else if (v >= 5) {
         migrate_56(SLOT(slot), v);

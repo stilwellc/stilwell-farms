@@ -1,0 +1,31 @@
+# Saltmarsh Harbour: by stagecoach. Export ships load here: crops and farm goods fetch the best price in the valley.
+map HARBOUR set=FARM w=16 h=14 music=BEACH
+key # BEACH_ROCK block
+key ~ WATER_15 water
+key w BEACH_WETSAND walk
+key . SAND walk
+key : BEACH_SAND2 walk
+key | BEACH_PIER walk
+key ! BEACH_PIER_END walk
+key r BEACH_ROCK block
+key x MINE_CRATE block
+key = DIRT walk
+grid
+~~~~~~~~~~~~~~~~
+~~~~~!~~~~!~~~~~
+~~~~~|~~~~|~~~~~
+~~~~~|~~~~|~~~~~
+wwwwwwwwwwwwwwww
+#..:.......:...#
+#.....x........#
+#.r........x:..#
+#...:..........#
+#.......:....r.#
+#..:...==......#
+#......==...:..#
+#......==......#
+#######==#######
+place REG_SHIP 11 0
+place REG_LIGHTHOUSE 13 5
+warp 7 13 MARKET 8 9 up
+warp 8 13 MARKET 8 9 up

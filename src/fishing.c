@@ -31,7 +31,9 @@ static uint8_t pick_fish(uint8_t x, uint8_t y) {
     p = PLOT_OF(x, y);
     if (scene == MAP_BEACH) return ocean_fish(r, tier);
     if (scene == MAP_ISLAND) return ocean_fish(r, tier + 3);   // deep water all round: the big ones come in close
-    if (scene == MAP_WOODS)                    // the lily pond: catfish after dark, and koi like nowhere else
+    if (scene == MAP_LAKESHORE && G.season == SEASON_WINTER)   // ice fishing: trout under the ice, and the big koi
+        return r < 40 + tier * 8 ? I_KOI : I_TROUT;
+    if (scene == MAP_WOODS || scene == MAP_LAKESHORE)   // the lily pond, the lake: catfish after dark, and koi like nowhere else
         return r < 24 + tier * 8 ? I_KOI : G.time >= 1080 ? I_CATFISH : (r & 1) ? I_BASS : I_CARP;
     if (G.valley_done & VD_FISH) tier++;       // the valley's streams, restored
     if (r < 3 + tier * 3) return I_KOI;

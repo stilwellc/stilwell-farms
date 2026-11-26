@@ -1,0 +1,46 @@
+# Lakeshore: by stagecoach. A wide, quiet lake. They have never seen the sea: shells and sea fish are treasure here.
+map LAKESHORE set=FARM w=16 h=14 music=LAKE
+key # FOREST block
+key P PINE block
+key . GRASS walk
+key , GRASS2 walk
+key = DIRT walk
+key L LILYPAD water
+key R REEDS block
+key x MINE_CRATE block
+key b BUSH block
+key 0 WATER_0 water
+key 1 WATER_1 water
+key 2 WATER_2 water
+key 3 WATER_3 water
+key 4 WATER_4 water
+key 5 WATER_5 water
+key 6 WATER_6 water
+key 7 WATER_7 water
+key 8 WATER_8 water
+key 9 WATER_9 water
+key A WATER_10 water
+key C WATER_11 water
+key D WATER_12 water
+key E WATER_13 water
+key G WATER_14 water
+key H WATER_15 water
+grid
+################
+#6GGGGGGGGGGGGD#
+#7HHHLHHHHHHLHE#
+#7HHHHHHHLHHHHE#
+#3HLHHHHHHHHHH9#
+#R3CCCCCCCCCC9R#
+#..R.......R...#
+#.....,..x.....#
+#P.........,..P#
+#...b..........#
+#..,...==....b.#
+#P.....==.....P#
+#PP....==....PP#
+#######==#######
+place REG_BOATHOUSE 11 4
+place REG_FERRY_BROKEN 4 6
+warp 7 13 MARKET 8 9 up
+warp 8 13 MARKET 8 9 up

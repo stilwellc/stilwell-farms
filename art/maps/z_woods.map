@@ -29,6 +29,7 @@ key D WATER_12 water
 key E WATER_13 water
 key G WATER_14 water
 key H WATER_15 water
+key x MINE_CRATE block
 grid
 ########################
 #PP..B....PP.....PPP..P#
@@ -41,7 +42,7 @@ grid
 ===========.3HHHH9....P#
 ===========..3CC9...,.P#
 #....,.........r......P#
-#.B.......s........b..P#
+#.B.......s...x....b..P#
 #......P......,.......P#
 #..,.......B.......,..P#
 #P.......,.......l....P#

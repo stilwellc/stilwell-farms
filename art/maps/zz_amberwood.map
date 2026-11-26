@@ -1,0 +1,30 @@
+# Amberwood: by stagecoach. It is always autumn here (main.c forces the fall palette). Craftsmen pay well for ore and gems.
+map AMBERWOOD set=FARM w=16 h=14 music=SPRING
+key # FOREST block
+key B BIRCH block
+key b BUSH block
+key . GRASS walk
+key , GRASS2 walk
+key = DIRT walk
+key l LOG block
+key s STUMP block
+key x MINE_CRATE block
+grid
+################
+#B..,..B...B..B#
+#....B.....,...#
+#.B......b....B#
+#...,..x.......#
+#B........B..,.#
+#....s.........#
+#..B....,...l.B#
+#.......B......#
+#B..,........B.#
+#......==...,..#
+#.B....==....B.#
+#B.....==.....B#
+#######==#######
+place REG_WORKSHOP 10 1
+place REG_TOTEM_BARE 2 5
+warp 7 13 MARKET 8 9 up
+warp 8 13 MARKET 8 9 up

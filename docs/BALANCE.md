@@ -477,3 +477,25 @@ The day used to be cave, farm, beach, town, bed. Five more places, none of them 
 Also: the Library's collection (`museum.c`: G1,500 an item for each finished group, G50,000 for all 70), a daily
 surprise (`daily.c`: trader 2 in 8, hot crop 2 in 8, bottle 1, fish run 1, nothing 2), letters and yearly wishes
 (`friends2.c`), a fifth heart scene (`hearts5.c`: 5 legendary seeds + G5,000). None of it is in the model yet.
+
+## The wider country: regional prices (Nov 2026)
+
+Six more places by stagecoach from the Crossroads Market (fares G150-400): Amberwood (always autumn), Saltmarsh
+Harbour, Lakeshore, Sunbake Mesa, Pinecrest (always snow), Stonegate. All eleven places have a trading post
+(`src/regions.c`). A post buys each of the eleven kinds of good at its own rate, 50-200 % of the plain price
+(`rate[place][group]`, in tenths), and sells three local goods at 80 %, three of each a day. The shipping bin
+still pays 100 % for everything. Best rates: fruit and river fish x2.0 and sea fish x1.8 at the Mesa; dishes x1.9
+and preserves x1.8 at Pinecrest; beach finds x1.8 and sea fish x1.7 at Lakeshore; gems x1.7 and ore x1.6 at
+Amberwood; crops and farm goods x1.6 at the Harbour; gold-star goods at double (not x1.5) at Stonegate.
+The daily cap on buying keeps post-to-post resale to about G1,000 a day. Not in the model.
+
+## The country comes alive (Nov 2026, `src/regions2.c`)
+
+- Standing at a place = gold sold there / 256: stars at 16, 64 and 160 (about G4k, 16k, 41k). +5 % a star.
+- Glut: selling n of a kind adds (n + 4) / 8 notches (max 15) at that place; -3 % a notch; one notch eases a night.
+- News: one place x kind a day at +50 % (hash of the date). A fair day per place per year: +30 % on everything.
+- Carrier job: weekly, 3 + stars of a good another post sells, paid at 4x.
+- Errands (the six stagecoach places, from one star): two loads of goods and G6,000-15,000; then +10 % there for
+  ever and the landmark is mended.
+- Offices: two stars and G40,000; goods sold from home then fetch that place's rate when it beats 100 %.
+- Almanac complete (all seen, three stars, errands, offices everywhere): G100,000.

@@ -166,7 +166,7 @@ static const uint16_t area_pal[16] = {0x7EDB, 0x6972, 0x3B0A, 0x0865,    // mine
                                       0x6FDF, 0x6717, 0x4DEE, 0x1CA4};   // beach: stone
 
 static void pal_push(uint8_t tint, uint8_t fade) {
-    const uint16_t *src = season_pal[G.season & 3];
+    const uint16_t *src = season_pal[scene == MAP_PINECREST ? SEASON_WINTER : scene == MAP_AMBERWOOD ? SEASON_FALL : (G.season & 3)];   // two places keep one season
     pal_ramps(tint, fade);
     if (scene == SCENE_FARM) { memcpy(pbuf, src, 64); accent_patch(); src = pbuf; }   // farm colours (built in place)
     pal_build(src, 32, PAL_UI * 4);
@@ -220,7 +220,7 @@ static void flash(void) {  // lightning
 // ---------------------------------------------------------------- music
 void music_for_scene(void) {
     uint8_t want;
-    if (scene == SCENE_FARM || IS_INTERIOR(scene) || (IS_NEW(scene) && scene != MAP_ISLAND)) {
+    if (scene == SCENE_FARM || IS_INTERIOR(scene) || (IS_NEW(scene) && sc_music == MUS_SPRING)) {   // (a place whose map names no tune of its own keeps the farm's)
         if (G.time >= 1200) want = MUS_NIGHT;
         else want = G.season == 0 ? MUS_SPRING : G.season == 1 ? MUS_SUMMER : G.season == 2 ? MUS_FALL : MUS_WINTER;
     } else if (IS_AREA(scene)) {

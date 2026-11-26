@@ -1,0 +1,27 @@
+# key D Phrygian dominant (D E- F+ G A B- C)  meter 4/4
+# Sunbake Mesa: sparse and dry. Short plucked phrases with air between them, hollow
+# fourths answering off the beat, a plodding root-and-fifth bass, a kick and a shaker.
+# The file is named zone_* so it sorts after winter.mml and the older song ids stay put.
+# A (1-8):  D  D  Eb D  | D  Cm Eb D
+# B (9-16): Gm Gm D  D  | Gm Cm D  Eb   (the Eb bar steps down a semitone onto bar 1)
+song DESERT tempo=9 loop=yes
+ch1 duty=1 env=a2
+o4 d8 f+8 a4 r4 a8 f+8 | o4 a2 r4 f+8 a8 | o4 b-4 g8 b-8 o5 e-4 r4 | o5 d4. o4 a8 f+4 r4 |
+o4 d8 f+8 a4 r4 o5 d8 o4 a8 | o5 c4. o4 g8 o5 e-4 r4 | o5 e-8 o4 b-8 g4 r4 b-8 g8 | o4 g8 f+4. r2 |
+o5 d4 r8 o4 b-8 o5 d4 g4 | o5 g4. d8 o4 b-4 r4 | o5 f+4 r8 d8 o4 a4 r4 | o5 d2 r4 e-8 d8 |
+o5 g4 r8 d8 b-4 g4 | o5 g4. e-8 c4 r4 | o5 d8 o4 a8 f+4 r4 a8 o5 d8 | o5 e-4 o4 b-4 g4 e-4 |
+ch2 duty=0 env=52
+r4 o3 a8 o4 d8 r4 o3 a8 r8 | r4 o3 a8 o4 d8 r4 o3 a8 r8 | r4 o3 b-8 o4 e-8 r4 o3 b-8 r8 | r4 o3 a8 o4 d8 r4 o3 a8 r8 |
+r4 o3 a8 o4 d8 r4 o3 a8 r8 | r4 o3 g8 o4 c8 r4 o3 g8 r8 | r4 o3 b-8 o4 e-8 r4 o3 b-8 r8 | r4 o3 a8 o4 d8 r4 o3 a8 r8 |
+r4 o4 d8 g8 r4 o4 d8 r8 | r4 o4 d8 g8 r4 o4 d8 r8 | r4 o4 f+8 a8 r4 o4 f+8 r8 | r4 o4 f+8 a8 r4 o4 f+8 r8 |
+r4 o4 d8 g8 r4 o4 d8 r8 | r4 o4 e-8 g8 r4 o4 e-8 r8 | r4 o4 f+8 a8 r4 o4 f+8 r8 | r4 o4 g8 b-8 r4 o4 g8 r8 |
+ch3 wave=bass vol=2
+o2 d4 r8 d8 a4 d4 | o2 d4 r8 d8 a4 d4 | o2 e-4 r8 e-8 b-4 e-4 | o2 d4 r8 d8 a4 d4 |
+o2 d4 r8 d8 a4 d4 | o3 c4 r8 c8 o2 g4 o3 c4 | o2 e-4 r8 e-8 b-4 e-4 | o2 d4 r8 d8 a4 d4 |
+o2 g4 r8 g8 o3 d4 o2 g4 | o2 g4 r8 g8 o3 d4 o2 g4 | o2 d4 r8 d8 a4 d4 | o2 d4 r8 d8 a4 d4 |
+o2 g4 r8 g8 o3 d4 o2 g4 | o3 c4 r8 c8 o2 g4 o3 c4 | o2 d4 r8 d8 a4 d4 | o2 e-4 r8 e-8 b-4 e-4 |
+ch4
+k4 r8 h8 r4 h8 r8 | k4 r8 h8 r4 h8 r8 | k4 r8 h8 r4 h8 r8 | k4 r8 h8 r4 h8 r8 |
+k4 r8 h8 r4 h8 r8 | k4 r8 h8 r4 h8 r8 | k4 r8 h8 r4 h8 r8 | k4 r8 h8 s8 r8 h8 h8 |
+k4 r8 h8 r4 h8 r8 | k4 r8 h8 r4 h8 r8 | k4 r8 h8 r4 h8 r8 | k4 r8 h8 r4 h8 r8 |
+k4 r8 h8 r4 h8 r8 | k4 r8 h8 r4 h8 r8 | k4 r8 h8 r4 h8 r8 | k4 r8 h8 s8 r8 h8 h8 |

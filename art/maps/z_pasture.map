@@ -14,13 +14,14 @@ key v FENCE_V block
 key q FENCE_POST block
 key t TROUGH block
 key y HAY_BALE block
+key x MINE_CRATE block
 grid
 ########################
 #P..,....*.....,....*.P#
 #..*....,.......*.....P#
 #.....hhhhqhhhh.....,..#
 #..,..v...t...v.*......#
-#.....v.......v.....B..#
+#.....v.......v..x..B..#
 #*....hhq...qhh..,.....#
 #...,.......*......b...#
 #.b......,........*....#

@@ -11,13 +11,14 @@ key ! BEACH_PIER_END walk
 key r BEACH_ROCK block
 key t BEACH_TIDEPOOL block
 key u BEACH_UMBRELLA block
+key x MINE_CRATE block
 grid
 ~~~~~~~~~~~~~~~~~~~~~~~~
 ~~~~~~~~~~~~~~~~~~~~~~~~
 ~~~~~~wwwwwwwwwww~~~~~~~
 ~~~~ww"""""""""""ww~~~~~
 ~~~w..............w~~~~~
-~~w.....:......r...w~~~~
+~~w.....:.x....r...w~~~~
 ~~w..........:..rt..w~~~
 ~~w...:..............w~~
 ~~w.........u.....:..w~~

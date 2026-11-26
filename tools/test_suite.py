@@ -297,7 +297,9 @@ class Game:
         self.WAIT_HI = self.WAIT_LO + 0x30
         self.kinds = {m: map_kind(m) for m in (MAP_TOWN, MAP_HOUSE1, MAP_HOUSE2, MAP_BARN, MAP_COOP, MAP_MINE, MAP_MINE_A,
                                                MAP_MINE_B, MAP_MINE_C, MAP_BEACH, CONST['MAP_WOODS'], CONST['MAP_ISLAND'],
-                                               CONST['MAP_MARKET'], CONST['MAP_PASTURE'], CONST['MAP_QUARRY'])}
+                                               CONST['MAP_MARKET'], CONST['MAP_PASTURE'], CONST['MAP_QUARRY'], CONST['MAP_AMBERWOOD'],
+                                               CONST['MAP_HARBOUR'], CONST['MAP_LAKESHORE'], CONST['MAP_MESA'], CONST['MAP_PINECREST'],
+                                               CONST['MAP_STONEGATE'])}
         self.tk = self.kinds[MAP_TOWN]
         self.outdir = outdir
         self.pb = None
@@ -3144,7 +3146,7 @@ def legacy_bytes(g, version):
     if raw[OFF['scene']] == SCENE_FARM:
         raw[OFF['px']] -= FO; raw[OFF['py']] -= FO
     for k in range(12):                              # where old saves kept them, 11 bytes each
-        raw[OFF['anim_v5'] + k * 11:OFF['anim_v5'] + k * 11 + 11] = raw[OFF['anim'] + k * ANIM_SIZE:OFF['anim'] + k * ANIM_SIZE + 11]
+        raw[OFF['region_taken'] + k * 11:OFF['region_taken'] + k * 11 + 11] = raw[OFF['anim'] + k * ANIM_SIZE:OFF['anim'] + k * ANIM_SIZE + 11]
     world = bytes(g.cell(i % 32, i // 32) for i in range(1024)) + bytes(g.a1(i % 32, i // 32) for i in range(1024)) + \
         bytes(g.a2(i % 32, i // 32) for i in range(1024))
     plots = g.u16('plots')
@@ -3742,6 +3744,196 @@ def s_animal_goods(c, g):
     g.go_face(3, 4, 'up'); g.act(); g.tick(30); g.press('select'); g.tick(10)
     g.choose(0, 0, 4, 2); g.tick(30); g.shot('herd_book'); g.press('a'); g.tick(10); g.dismiss()
     c.check(g.u8('herd', 3) & (1 << 5), "the pig's sparkle is in the Herd Book")
+
+
+@scenario('save_v7_migrate')
+def s_save_v7(c, g):
+    """a real v7 battery file loads into v8: same layout, with the old animal block cleared for the regions"""
+    g.stop()
+    shutil.copy(os.path.join(ROOT, 'tools/fixtures/v7_animals.ram'), g.rom + '.ram')
+    g.boot()
+    title_start(g)
+    g.choose(1, 9, 2, 0); g.choose(8, 4, 3, 0)
+    g.tick(60); g.dismiss(); g.wait_field()
+    c.eq(g.u8('version'), SAVE_VERSION, 'upgraded to the current version')
+    c.eq((g.u32('gold'), g.u8('year'), g.u8('fund_lvl'), g.u8('con_stars')), (765432, 4, 3, 5), 'gold, date, late game')
+    got = g.animals()
+    c.eq([(a['name'], a['kind'], a['flags'] >> 6) for _, a in got], [('An%02d' % k, k % 3, k % 4) for k in range(20)], 'all twenty animals')
+    c.eq([(g.u8('anim', k * ANIM_SIZE + ANIM_OFF['trait']), g.u8('anim', k * ANIM_SIZE + ANIM_OFF['gen'])) for k in range(20)],
+         [((k * 13) & 0xFF, k) for k in range(20)], 'traits and generations kept')
+    c.eq([g.u8('region_taken', i) for i in range(6)] + [g.u8('post_stock', i) for i in range(11)], [0] * 17, 'the reused block starts clean')
+    c.eq(g.u8('herd', 2) & 0x5A, 0x5A, 'the Herd Book kept')
+    c.eq([(g.u8('inv', it * 3), g.u8('inv', it * 3 + 2)) for it in range(70)], [((it * 7 + 3) % 200, it % 5) for it in range(70)], 'the bag')
+
+
+@scenario('regions', base='town')
+def s_regions(c, g):
+    """the stagecoach from the Crossroads Market to the far places, each with a trading post and its own prices"""
+    M, MESA, HARB = CONST['MAP_MARKET'], CONST['MAP_MESA'], CONST['MAP_HARBOUR']
+    g.w8('energy', 200); g.w8('tool', T_HAND); g.w32('gold', 1000)
+    cart_to(g, 2, M)
+    # the market's own post: a little over the odds for anything
+    g.w8('inv', 10, I_CORN * 3)
+    g.go_face(2, 9, 'up'); g.act()
+    g.choose(0, 0, 4, 0)                                 # Sell (the post menu: Sell, Buy, ..., Almanac, Bye)
+    g.wait_menu(0, 0, 2); g.shot('market_post')
+    g.choose(0, 0, 2, 0); g.quantity(10); g.tick(10)
+    c.eq(g.u32('gold'), 1000 + 10 * (ITEM_PRICE[I_CORN] * 11 // 10), 'corn at the market: 110 %')
+    g.dismiss()
+    # the coach: no fare, no ride
+    g.w32('gold', 100)
+    g.go_face(11, 9, 'up'); g.act()
+    g.choose(0, 1, 7, 3); g.tick(20); g.dismiss()
+    c.eq((g.u8('scene'), g.u32('gold')), (M, 100), 'not without the fare')
+    g.w32('gold', 5000)
+    g.go_face(11, 9, 'up'); g.act()
+    g.choose(0, 1, 7, 3)                                 # Sunbake Mesa, G300
+    g.wait_scene((MESA,))
+    g.tick(20); g.dismiss()
+    c.eq((g.pos(), g.u32('gold')), ((8, 11), 4700), 'arrived on the mesa, fare paid')
+    g.shot('mesa')
+    # fish and fruit sell for double; ore for little
+    g.w8('inv', 5, I_TUNA * 3); g.w8('inv', 4, I_COPPER * 3); g.w8('inv', 2, I_APPLE * 3 + 2)
+    g.go_face(4, 6, 'up'); g.act()
+    g.choose(0, 0, 4, 0)
+    g.wait_menu(0, 0, 4); g.shot('mesa_prices')
+    gold = g.u32('gold')
+    g.choose(0, 0, 4, 0); g.quantity(2); g.tick(10)      # gold-star apples (items list in item order)
+    c.eq(g.u32('gold'), gold + 2 * ((ITEM_PRICE[I_APPLE] * 3 // 2) * 2), 'gold apples at double')
+    g.wait_menu(0, 0, 3)
+    gold = g.u32('gold')
+    g.choose(0, 0, 3, 0); g.quantity(4); g.tick(10)      # copper, which the mesa is made of
+    c.eq(g.u32('gold'), gold + 4 * (ITEM_PRICE[I_COPPER] * 6 // 10), 'copper at 60 %')
+    g.wait_menu(0, 0, 2)
+    gold = g.u32('gold')
+    g.choose(0, 0, 2, 0); g.quantity(5); g.tick(10)
+    c.eq(g.u32('gold'), gold + 5 * (ITEM_PRICE[I_TUNA] * 18 // 10), 'tuna at 180 %')
+    g.wait_menu(0, 0, 4)                                 # the bag is empty: back at the post
+    # three of each a day at four fifths of the price
+    gold = g.u32('gold')
+    g.choose(0, 0, 4, 1)
+    for _ in range(4):
+        g.choose(0, 0, 4, 0); g.tick(10)
+    g.wait_menu(0, 0, 4)
+    c.eq((g.inv(I_GOLD), g.u32('gold')), (3, gold - 3 * (ITEM_PRICE[I_GOLD] - ITEM_PRICE[I_GOLD] // 5)), 'three gold ore, no more')
+    g.choose(0, 0, 4, 3); g.wait_menu(0, 0, 4); g.dismiss()
+    # something glints in the sand
+    stamp = g.u8('area_stamp')
+    held = lambda: sum(g.inv(it) for it in range(NUM_ITEMS))
+    n0 = held()
+    for x, y in ((3, 2), (8, 4), (12, 6), (5, 9), (10, 11)):
+        for dx, dy, d in ((0, 1, 'up'), (0, -1, 'down'), (-1, 0, 'right'), (1, 0, 'left')):
+            if g.walkable(x + dx, y + dy):
+                g.go_face(x + dx, y + dy, d); g.act(); g.tick(20); g.dismiss()
+                break
+    c.check(held() > n0 and g.u8('region_taken', 3), f'picked things up on the mesa ({held() - n0})')
+    # home by the south road: back at the market
+    g.go(8, 12); g.step('down')
+    g.wait_scene((M,))
+    c.eq(g.pos(), (8, 9), 'the coach drops you at the market')
+    # a second region, to see its colours
+    g.go_face(11, 9, 'up'); g.act(); g.choose(0, 1, 7, 4)
+    g.wait_scene((CONST['MAP_PINECREST'],)); g.tick(20); g.dismiss(); g.shot('pinecrest')
+    g.go(8, 12); g.step('down'); g.wait_scene((M,))
+    g.go_face(11, 9, 'up'); g.act(); g.choose(0, 1, 7, 1)
+    g.wait_scene((HARB,)); g.tick(20); g.dismiss(); g.go(8, 6); g.tick(10); g.shot('harbour')
+
+
+def _mix(v):
+    v ^= (v << 3) & 0xFF; v ^= v >> 5; v = (v + 0x9B) & 0xFF; v ^= (v << 2) & 0xFF
+    return v
+
+
+def carry_job(year, season, day):
+    """regions2.c, mirrored: this week's carrier job -> (place it is for, item index among its source's three)"""
+    wk = (year * 16 + season * 4 + (day - 1) // 7 + 1) & 0xFF
+    to = _mix(wk ^ 0xA7) % 11
+    frm = (to + 1 + _mix(wk) % 10) % 11
+    return to, frm, _mix(wk ^ 0x3D) % 3
+
+
+@scenario('living_regions', base='town')
+def s_living(c, g):
+    """standing, a flooded market, an office, the carrier job, an errand and the almanac"""
+    M, PINE = CONST['MAP_MARKET'], CONST['MAP_PINECREST']
+    STOCK = [[CONST[n.strip()] for n in r.split(',')] for r in re.findall(r'\{([^{}]*)\}', _table(_src('regions.c'), 'stock'))]
+    g.w8('energy', 200); g.w8('tool', T_HAND)
+    # a week whose carrier job is for the market
+    wk = next((se, d) for se in range(4) for d in (1, 8, 15, 22) if carry_job(1, se, d)[0] == 1 or None) if any(
+        carry_job(1, se, d)[0] == 1 for se in range(4) for d in (1, 8, 15, 22)) else None
+    if wk:
+        g.w8('season', wk[0]); g.w8('day', wk[1])
+    cart_to(g, 2, M)
+    # standing: each star is 5 % more; a flooded market pays less
+    g.w8('rep', 64, 1)                                   # two stars at the market
+    for i in range(61):
+        g.w8('glut', 0, i)
+    g.w8('inv', 99, I_COAL * 3)
+    news = 50 if False else 0
+    g.go_face(2, 9, 'up'); g.act()
+    g.choose(0, 0, 4, 0); g.wait_menu(0, 0, 2)
+    gold = g.u32('gold')
+    g.choose(0, 0, 2, 0); g.quantity(1); g.tick(10)
+    one = g.u32('gold') - gold
+    base = ITEM_PRICE[I_COAL] * 11 // 10
+    c.check(one in (base * 110 // 100, base * 160 // 100, base * 140 // 100, base * 190 // 100), f'two stars: +10 % (paid {one}, plain {base})')
+    g.wait_menu(0, 0, 2)
+    g.choose(0, 0, 2, 0); g.quantity(60); g.tick(10)     # a cartload floods the market
+    g.wait_menu(0, 0, 2)
+    gold = g.u32('gold')
+    g.choose(0, 0, 2, 0); g.quantity(1); g.tick(10)
+    c.check(g.u32('gold') - gold < one, f'after a cartload the price is down ({g.u32("gold") - gold} < {one})')
+    g.dismiss()
+    # an office: two stars and G40,000
+    g.w32('gold', 50000)
+    g.go_face(2, 9, 'up'); g.act()
+    n = 6 if wk else 5                                    # Sell, Buy, [Carrier job], Open an office, Almanac, Bye
+    g.wait_menu(0, 0, n); g.shot('post_menu')
+    g.choose(0, 0, n, n - 3); g.yesno(True); g.tick(30)
+    g.wait_menu(0, 0, n - 1)
+    c.eq((g.u8('office', 0) & 2, g.u32('gold')), (2, 10000), 'an office at the market')
+    if wk:                                                # the carrier job: bring what was asked
+        to, frm, k = carry_job(1, wk[0], wk[1])
+        it = STOCK[frm][k]
+        g.w8('inv', 10, it * 3)
+        g.choose(0, 0, n - 1, 2); g.yesno(True); g.tick(30)
+        g.wait_menu(0, 0, n - 2)
+        c.eq((g.u8('carry_done'), g.u32('gold')), (1, 10000 + ITEM_PRICE[it] * (3 + 2) * 4), 'carrier job paid at four times')
+        n -= 1
+    c.check(g.u8('seen', 0) & 2, 'the market is in the almanac')
+    g.choose(0, 0, n - 1, n - 3); g.tick(30); g.shot('almanac'); g.press('a'); g.tick(10)
+    g.dismiss()
+    # Pinecrest's frozen well: two loads and the cost of the work
+    g.w32('gold', 20000); g.w8('weather', 0)
+    g.go_face(11, 9, 'up'); g.act(); g.choose(0, 1, 7, 4)
+    g.wait_scene((PINE,)); g.tick(20); g.dismiss()
+    g.w8('rep', 16, 9)                                   # one star: the keeper asks
+    g.w8('inv', 30, I_COAL * 3); g.w8('inv', 10, I_CIDER * 3)
+    g.shot('pinecrest_before')
+    for step in range(3):
+        g.go_face(7, 4, 'up'); g.act()
+        g.choose(0, 0, 5, 2)                             # Sell, Buy, Errand, Almanac, Bye
+        g.yesno(True); g.tick(40)
+        for _ in range(8):
+            g.dismiss(); g.tick(10)
+    i = (9 - 5) * 2
+    c.eq((g.u8('errand', i >> 3) >> (i & 7)) & 3, 3, 'the well is thawed')
+    c.eq((g.inv(I_COAL), g.inv(I_CIDER), g.u32('gold')), (10, 4, 20000 - 300 - 9000), 'two loads and the cost of the work')
+    g.go(8, 6); g.tick(10); g.shot('pinecrest_after')
+
+
+@scenario('office_at_home', base='town')
+def s_office_home(c, g):
+    """with an office on the Mesa, tuna sold at Alyssa's counter fetches the Mesa's rate"""
+    g.w8('office', 1, 1)                                 # place 8: the Mesa
+    g.w8('inv', 2, I_TUNA * 3)
+    g.go_face(11, 4, 'up'); g.act()
+    g.wait_menu(0, 0, STORE_N)
+    gold = g.u32('gold')
+    g.choose(0, 0, STORE_N, 6)
+    g.choose(0, 0, 2, 0); g.quantity(2); g.tick(10)
+    c.eq(g.u32('gold'), gold + 2 * (ITEM_PRICE[I_TUNA] * 18 // 10), 'tuna at 180 % through the office')
+    g.dismiss()
 
 
 @scenario('friends_letters')

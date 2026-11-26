@@ -182,7 +182,7 @@ enum { ROLE_WATER, ROLE_HARVEST, ROLE_RANCH, ROLE_GROUNDS, ROLE_SHOP, NUM_ROLES 
 #define TP_LIBRARY 32
 #define PANTRY 8                // ingredient slots per business
 #define SAVE_MAGIC 0x5F17
-#define SAVE_VERSION 7
+#define SAVE_VERSION 8
 #define MAX_FURN 24             // house furniture pieces (interior.c)
 #define NUM_ACCENT 3            // design tools: recolourable accent palette entries
 #define BP_SLOTS 2              // design tools: blueprint slots, each up to BP_MAX x BP_MAX cells
@@ -193,7 +193,15 @@ typedef struct {
     uint8_t version;
     uint8_t plots[8];               // owned land plots: bit x of byte y = plot (x, y) of the 8x8 grid
     Building bld[MAX_BLD];
-    uint8_t anim_v5[V5_ANIMALS * OLD_ANIMAL];   // where the animals lived up to save v5; carried into anim on load, spare since
+    // (these 132 bytes held the 12 animals of saves up to v5; zeroed and reused since v8)
+    uint8_t region_taken[6];        // areas.c: like area_taken, for the six stagecoach regions
+    uint8_t post_stock[11];         // regions.c: bought today at each trading post (2 bits a good)
+    uint8_t rep[11];                // regions2.c: your standing at each place (gold sold there / 256)
+    uint8_t glut[61];               // regions.c: how flooded each market is (a nibble per place x kind of good)
+    uint8_t errand[3];              // regions2.c: 2 bits a stagecoach place (3 = mended); bit 22 the almanac prize
+    uint8_t office[2], seen[2];     // ... a bit a place: your office there; visited
+    uint8_t carry_week, carry_done; // ... this week's carrier job
+    uint8_t more8[V5_ANIMALS * OLD_ANIMAL - 17 - 81];   // zero: room for what comes next
     uint32_t gold, earned, ship_value;
     uint16_t time;                  // minutes since midnight (360..1560)
     uint8_t day, season, year;
@@ -317,8 +325,8 @@ extern GameState G;
 #define IS_BARNIN(s) ((uint8_t)((s) - MAP_BARN) < 2)   // inside a barn or coop (barn.c; MAP_COOP = MAP_BARN + 1)
 #define IS_INTERIOR(s) ((uint8_t)((s) - MAP_HOUSE1) < 2 || IS_BARNIN(s))   // inside a barn or coop (barn.c)
 #define IS_MINE(s) ((s) >= MAP_MINE && (s) <= MAP_MINE_C)     // the entrance cave and the three floor layouts
-#define IS_NEW(s) ((uint8_t)((s) - MAP_ISLAND) < 5)        // Shell Island, the Market, the High Pasture, the Quarry, the Old Woods
-#define IS_SHORE(s) ((s) == MAP_BEACH || (s) == MAP_ISLAND)
+#define IS_NEW(s) ((uint8_t)((s) - MAP_ISLAND) < 11)       // the eleven places to visit, Shell Island .. Stonegate (areas.c, regions.c)
+#define IS_SHORE(s) ((s) == MAP_BEACH || (s) == MAP_ISLAND || (s) == MAP_HARBOUR || (s) == MAP_MESA)   // sand-coloured places
 #define IS_OPEN(s) ((s) == MAP_BEACH || IS_NEW(s))         // open-air places to visit (areas.c)
 #define IS_AREA(s) (IS_OPEN(s) || IS_MINE(s))
 #define MINE_FLOORS 20
@@ -558,6 +566,30 @@ uint8_t biz_tiers(void) BANKED;              // facade tiers summed over owned b
 void friends_overnight(void) BANKED;         // friends2.c: a letter for every new heart
 void friends_letter(void) BANKED;            // ... read the next one
 uint8_t wish_talk(uint8_t npc, uint8_t first_today) BANKED;   // ... this year's big wish; 1 = it was granted just now
+uint8_t item_group(uint8_t it) BANKED;       // museum.c: 0 crops 1 fruit 2 farm goods 3 wild 4 river fish 5 ore 6 gems 7 preserves 8 sea fish 9 beach 10 dishes
+void post_act(void) BANKED;                  // regions.c: this place's trading post
+uint8_t region_rate(uint8_t place, uint8_t it) BANKED;
+uint8_t region_stock(uint8_t place, uint8_t k) BANKED;
+uint8_t office_rate(uint8_t it) BANKED;      // tenths your offices get for a good shipped from home (>= 10)
+// regions2.c: standing, news, the carrier job, errands, offices, the almanac
+uint8_t region_stars(uint8_t a) BANKED;
+void region_sold(uint8_t a, uint32_t gold) BANKED;
+void region_seen(uint8_t a) BANKED;
+void regions_night(void) BANKED;
+uint8_t news_place(void) BANKED;
+uint8_t news_group(void) BANKED;
+uint8_t region_fair(uint8_t a) BANKED;
+void regions_tv(void) BANKED;
+void region_news_line(void) BANKED;
+uint8_t carry_here(uint8_t a) BANKED;
+void carry_do(uint8_t a) BANKED;
+void carry_tv(void) BANKED;
+uint8_t region_errand(uint8_t a) BANKED;
+uint8_t region_errand_open(uint8_t a) BANKED;
+void region_errand_do(uint8_t a) BANKED;
+void region_office(uint8_t a) BANKED;
+void almanac_page(void) BANKED;
+void coach_act(void) BANKED;                 // regions.c: the stagecoach at the Crossroads Market
 // animals.c: kinds, breeds, traits, the Herd Book
 uint8_t anim_item(uint8_t an) BANKED;        // what it gives
 uint8_t anim_yield(uint8_t an) BANKED;       // (quality << 4) | count right now

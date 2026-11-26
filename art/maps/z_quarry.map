@@ -5,6 +5,7 @@ key c CLIFF block
 key . GRASS walk
 key = PATH walk
 key r ROCK block
+key x MINE_CRATE block
 grid
 cccccccccccccccc
 c..............c
@@ -14,7 +15,7 @@ c..........r...c
 c..............c
 c.r............c
 c..............c
-c.........r....c
+c.........r.x..c
 c..............c
 c......==......c
 ccccccc==ccccccc

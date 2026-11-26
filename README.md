@@ -294,6 +294,8 @@ Renovate your house and every farm building into one of four styles.
 |---|---|
 | **World** | A 64×64-tile valley of woods, lakes, marsh, quarries and a river in 64 buyable plots, a valley map, a town, a mine and a beach |
 | **Places to visit** | The Old Woods off Main Street; the Granite Quarry, the High Pasture and the weekend Crossroads Market by minecart; Shell Island by rowing boat. Each has something new every morning |
+| **The wider country** | Six regions by stagecoach: Amberwood, Saltmarsh Harbour, Lakeshore, Sunbake Mesa, Pinecrest and Stonegate, each with its own scenery, keeper, music and daily finds |
+| **Trade** | A trading post in all eleven places, each paying its own price for every kind of good. Prices move with what you sell, the news and fair days. Earn standing, run carrier jobs, mend each region's landmark, open offices, fill the Almanac |
 | **Farming** | 14 crops in Common, Rare and Legendary, 4 fruit trees, quality stars, fertilizer, sprinklers, giant pumpkins |
 | **Animals** | Cows, hens, sheep, goats, ducks and pigs, up to 36 of them, in four breeds. Each has a size and a temperament, and one birth in 64 sparkles. Pair them to breed, raise the babies well and they grow up big, sell the ones you don't keep, and fill the Herd Book. Plus a horse to ride and Buddy the dog |
 | **Year 3 and on** | An endless Town Fund, seasonal contracts that grow each year, Grandpa's review every spring, the Library's 73-piece collection, a daily surprise, letters and yearly wishes from friends, a fifth heart |

@@ -114,9 +114,11 @@ static void wait_ab(uint8_t arrow) {
 }
 
 // Typewriter text in the bottom box with word wrap. '\n' forces a new line.
-static const char *const pnames[9] = {"Grandpa", "Alyssa", "Brick", "Andy", "Raza", "Joe", "Marcy", "Corey", "Mike"};
-static const mt_t pmts[9] = {ST_PORTRAIT_GRANDPA, ST_PORTRAIT_ROSA, ST_PORTRAIT_BRICK, ST_PORTRAIT_JUNE,
-                             ST_PORTRAIT_ADA, ST_PORTRAIT_HOLLIS, ST_PORTRAIT_MILO, ST_PORTRAIT_COREY, ST_PORTRAIT_MIKE};
+static const char *const pnames[15] = {"Grandpa", "Alyssa", "Brick", "Andy", "Raza", "Joe", "Marcy", "Corey", "Mike",
+                                        "Wren", "Captain", "Isla", "Dusty", "Nora", "Sage"};   // the stagecoach places' keepers
+static const mt_t pmts[15] = {ST_PORTRAIT_GRANDPA, ST_PORTRAIT_ROSA, ST_PORTRAIT_BRICK, ST_PORTRAIT_JUNE,
+                             ST_PORTRAIT_ADA, ST_PORTRAIT_HOLLIS, ST_PORTRAIT_MILO, ST_PORTRAIT_COREY, ST_PORTRAIT_MIKE,
+                             ST_PORTRAIT_WREN, ST_PORTRAIT_CAPTAIN, ST_PORTRAIT_ISLA, ST_PORTRAIT_DUSTY, ST_PORTRAIT_NORA, ST_PORTRAIT_SAGE};
 
 // ui_speaker is read by bank-0 dialog code while whatever bank called say() is mapped, so banked
 // callers hand their name over in a RAM copy (a pointer into their own bank read as garbage / hung)
@@ -138,7 +140,7 @@ static void dialog_print(const char *s, uint8_t wait_end) {
     const char *w;
     ui_box(0, 12, 20, 6);
     if (ui_speaker) {
-        for (i = 0; i < 9; i++)
+        for (i = 0; i < 15; i++)
             if (streq(ui_speaker, pnames[i])) {
                 ui_put_struct(1, 13, pmts[i], 2, 2);
                 x0 = 6; tw = 12;

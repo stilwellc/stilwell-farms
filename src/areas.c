@@ -28,7 +28,7 @@ static void gain(uint8_t it, uint8_t q, uint8_t n) {   // "+2 Iron" (built here:
     player_pose(1, 24);
 }
 
-static uint8_t told;   // first-visit lines shown this session: 1 mine, 2 beach
+static uint16_t told;   // first-visit lines shown this session: 1 mine, 2 beach, 4 << place
 
 // ================================================================ the mine
 // this visit's floor (not saved: a floor is laid out fresh each time you arrive)
@@ -84,6 +84,11 @@ static void lay_floor(void) {
             if (ROCK_AT(x, y) && !k--) { mn_lad_x = x; mn_lad_y = y; return; }
 }
 
+static uint8_t mended;   // this place's errand is done: its broken landmark is drawn whole (area_mt)
+// the six stagecoach places' landmarks: broken, mended, how many cells
+static const mt_t fix_from[6] = {ST_REG_TOTEM_BARE, ST_REG_LIGHTHOUSE, ST_REG_FERRY_BROKEN, MT_REG_DRY_PUMP, MT_REG_FROZEN_WELL, ST_REG_STATUE_HEADLESS};
+static const mt_t fix_to[6] = {ST_REG_TOTEM_CARVED, ST_REG_LIGHTHOUSE_LIT, ST_REG_FERRY_MENDED, MT_REG_PUMP_FLOWING, MT_REG_WELL_THAWED, ST_REG_STATUE_WHOLE};
+static const uint8_t fix_n[6] = {2, 3, 2, 1, 1, 2};
 static uint8_t news;   // set by area_enter: 1 = a new lift stop, 2 = first time at the bottom
 
 void area_enter(void) BANKED {
@@ -96,9 +101,14 @@ void area_enter(void) BANKED {
         if (G.beach_stamp != t) { G.beach_stamp = t; G.beach_taken = 0; }
         return;
     }
+    mended = IS_NEW(scene) && region_errand((uint8_t)(scene - MAP_ISLAND)) == 3;   // regions2.c: this place's landmark is repaired
     if (IS_NEW(scene)) {   // a new day: everything has grown back, everywhere
         uint8_t t = (uint8_t)(G.season * 28 + G.day) ^ (uint8_t)(G.year << 6) ^ 0x5A;
-        if (G.area_stamp != t) { G.area_stamp = t; memset(G.area_taken, 0, sizeof(G.area_taken)); }
+        if (G.area_stamp != t) {
+            G.area_stamp = t;
+            memset(G.area_taken, 0, sizeof(G.area_taken));
+            memset(G.region_taken, 0, sizeof(G.region_taken) + sizeof(G.post_stock));   // (post_stock follows it)
+        }
         return;
     }
     if (scene == MAP_MINE) { G.mine_floor = 0; return; }
@@ -284,11 +294,14 @@ static void beach_act(uint8_t x, uint8_t y) {
 // ================================================================ places to visit
 // Shell Island, the Crossroads Market, the High Pasture, the Granite Quarry, the Old Woods: static maps with up
 // to seven places where something comes back each morning, and one daily find each (bit 7 of area_taken).
-#define AI(s) ((uint8_t)((s) - MAP_ISLAND))     // 0 island, 1 market, 2 pasture, 3 quarry, 4 woods
-#define TAKEN G.area_taken[AI(scene)]
-static const uint8_t sp_n[5] = {7, 0, 6, 7, 7};
-static const uint8_t sp_x[5][7] = {{5, 9, 14, 17, 7, 12, 19}, {0}, {4, 9, 16, 20, 3, 18}, {3, 8, 12, 5, 13, 4, 9}, {4, 8, 15, 20, 3, 12, 7}};
-static const uint8_t sp_y[5][7] = {{5, 4, 7, 9, 9, 6, 7}, {0}, {2, 7, 8, 2, 9, 11}, {2, 3, 2, 5, 6, 8, 6}, {3, 2, 2, 10, 12, 13, 15}};
+#define AI(s) ((uint8_t)((s) - MAP_ISLAND))     // 0 island, market, pasture, quarry, woods, amberwood, harbour, lakeshore, mesa, pinecrest, 10 stonegate
+#define TAKEN (*(AI(scene) < 5 ? &G.area_taken[AI(scene)] : &G.region_taken[AI(scene) - 5]))
+#define NPLACE 11
+static const uint8_t sp_n[NPLACE] = {7, 0, 6, 7, 7, 5, 5, 5, 5, 5, 5};
+static const uint8_t sp_x[NPLACE][7] = {{5, 9, 14, 17, 7, 12, 19}, {0}, {4, 9, 16, 20, 3, 18}, {3, 8, 12, 5, 13, 4, 9}, {4, 8, 15, 20, 3, 12, 7},
+                                        {3, 9, 12, 4, 11}, {2, 9, 5, 12, 3}, {1, 6, 12, 3, 10}, {3, 8, 12, 5, 10}, {3, 11, 7, 3, 12}, {2, 12, 3, 10, 13}};
+static const uint8_t sp_y[NPLACE][7] = {{5, 4, 7, 9, 9, 6, 7}, {0}, {2, 7, 8, 2, 9, 11}, {2, 3, 2, 5, 6, 8, 6}, {3, 2, 2, 10, 12, 13, 15},
+                                        {2, 4, 6, 8, 9}, {5, 6, 8, 9, 11}, {6, 8, 9, 11, 7}, {2, 4, 6, 9, 11}, {2, 3, 5, 8, 9}, {2, 2, 8, 8, 10}};
 static const uint8_t wd_x[7] = {4, 8, 15, 20, 3, 12, 7};      // (the woods' row again: the test suite reads it)
 static const uint8_t wd_y[7] = {3, 2, 2, 10, 12, 13, 15};
 
@@ -304,6 +317,12 @@ static uint8_t place_item(uint8_t k) {   // what is at place k of this map today
     case MAP_ISLAND: return h < 22 ? I_SHELL : h < 38 ? I_SEAGLASS : h < 50 ? I_DRIFTWOOD : I_CORAL;
     case MAP_QUARRY: return h < 26 ? I_COPPER : h < 44 ? I_IRON : h < 56 ? I_COAL : I_GOLD;
     case MAP_PASTURE: return h < 34 ? I_HERB : h < 50 ? I_MUSHROOM : I_BERRIES;
+    case MAP_AMBERWOOD: return h < 30 ? I_MUSHROOM : h < 50 ? I_BERRIES : I_HERB;
+    case MAP_HARBOUR: return h < 26 ? I_SHELL : h < 44 ? I_SEAGLASS : h < 56 ? I_DRIFTWOOD : I_CORAL;
+    case MAP_LAKESHORE: return h < 30 ? I_HERB : h < 48 ? I_BERRIES : I_MUSHROOM;
+    case MAP_MESA: return h < 22 ? I_COPPER : h < 38 ? I_GOLD : h < 52 ? I_COAL : I_GEM;
+    case MAP_PINECREST: return h < 34 ? I_MUSHROOM : h < 52 ? I_HERB : I_COAL;
+    case MAP_STONEGATE: return h < 40 ? I_HERB : h < 54 ? I_GEM : h < 60 ? I_TOPAZ : I_EMERALD;
     }
     if (G.season == SEASON_FALL) return h < 36 ? I_MUSHROOM : h < 52 ? I_BERRIES : I_HERB;
     if (G.season == SEASON_WINTER) return h < 40 ? I_MUSHROOM : I_HERB;
@@ -483,6 +502,9 @@ static void cart_ride(void) {   // the minecart at the mine entrance: out to thr
 
 static void new_act(uint8_t x, uint8_t y) {
     uint8_t k = place_at(x, y), it;
+    mt_t m = map_mt(MIDX(x, y));
+    if (m == MT_MINE_CRATE) { post_act(); return; }                        // regions.c: every place has a trading post
+    if (scene == MAP_MARKET && m == MT_SIGN) { coach_act(); return; }       // ... and the stagecoach leaves from the market
     if (scene == MAP_WOODS && x == 17 && y == 14) { hollow_log(); return; }
     if (scene == MAP_ISLAND && x == 12 && y == 8) { island_dig(); return; }
     if (scene == MAP_PASTURE && x == 10 && y == 4) { trough(); return; }
@@ -500,7 +522,7 @@ static void new_act(uint8_t x, uint8_t y) {
     }
     if (map_kind(MIDX(x, y)) & K_WATER) {
         if (G.tool == T_ROD) fish_start();
-        else hud_flash(scene == MAP_ISLAND ? "Deep blue water" : "A still, green pond");
+        else hud_flash(IS_SHORE(scene) ? "Deep blue water" : "Still, green water");
     }
 }
 
@@ -509,8 +531,13 @@ mt_t area_mt(uint8_t x, uint8_t y) BANKED {
     mt_t m;
     if (IS_NEW(scene)) {
         uint8_t k = place_at(x, y), it;
-        if (k != 0xFF && (it = place_item(k)) != 0xFF) return place_mt(it);
-        return map_mt(MIDX(x, y));
+        if (k != 0xFF && (it = place_item(k)) != 0xFF) return scene == MAP_MESA ? MT_BEACH_GLASS : place_mt(it);   // on the mesa: a glint in the sand
+        m = map_mt(MIDX(x, y));
+        if (mended) {
+            k = (uint8_t)(scene - MAP_AMBERWOOD);
+            if (m >= fix_from[k] && m < fix_from[k] + fix_n[k]) m += fix_to[k] - fix_from[k];
+        }
+        return m;
     }
     if (scene == MAP_BEACH) {
         uint8_t k = spot_at(x, y);
@@ -567,15 +594,29 @@ void area_act(void) BANKED {
 
 void area_step(void) BANKED {
     if (IS_NEW(scene)) {
-        static const char *const hello[5] = {
+        static const char *const hello[NPLACE] = {
             "Shell Island! Nobody comes out here. Shells everywhere, and deep water on every side.",
-            "The Crossroads Market. Traders set up here at the end of every week: the 6th and 7th days.",
+            "The Crossroads Market. Stalls at the week's end; the stagecoach sign and trading post every day.",
             "The High Pasture. Wild herbs underfoot, and a herd that keeps to the trees. They look hungry.",
             "The Granite Quarry. Ore shows in the rock fresh each morning. Bring your hammer!",
-            "The Old Woods. Berries, mushrooms and herbs come up fresh each morning, and the pond is full of fish."};
-        uint8_t bit = 4 << AI(scene);
-        sfx(scene == MAP_ISLAND ? SFX_STEP_SAND : SFX_STEP);
+            "The Old Woods. Berries, mushrooms and herbs come up fresh each morning, and the pond is full of fish.",
+            "Amberwood. It is always autumn under these birches. You can hear hammers and saws somewhere.",
+            "Saltmarsh Harbour. Tall ships at the piers, salt on the wind, and crates stacked for export.",
+            "Lakeshore. Water like glass, and reeds as far as you can see. Nobody here has seen the ocean.",
+            "Sunbake Mesa. Red rock and white sand. Not a leaf, not a puddle. Things glint in the ground.",
+            "Pinecrest. Snow all year round, lamps lit at noon, and woodsmoke from somewhere up the hill.",
+            "Stonegate. Old walls, an arch to nowhere, and a statue nobody can put a name to."};
+        uint16_t bit = 4 << AI(scene);
+        sfx(IS_SHORE(scene) ? SFX_STEP_SAND : SFX_STEP);
         if (!(told & bit)) { told |= bit; say(hello[AI(scene)]); }
+        region_seen(AI(scene));
+        if (!(G.pet_flags & 2)) {              // once a day Buddy, who came along, noses something out
+            G.pet_flags |= 2;
+            if (G.pet_love >= 100 && (rnd() & 1)) {
+                hud_flash("Buddy found something!");
+                gain(IS_SHORE(scene) ? I_SHELL : scene == MAP_QUARRY ? I_COPPER : I_HERB, 0, 1);
+            }
+        }
         return;
     }
     if (scene != MAP_BEACH) { mine_step(); return; }
@@ -639,7 +680,8 @@ void area_map(void) BANKED {
     s_clr();
     if (scene == MAP_BEACH) { s_add("The Beach: "); s_num(beach_finds(), 0); s_add(" finds"); }
     else if (IS_NEW(scene)) {
-        static const char *const an[5] = {"Shell Island", "The Market", "High Pasture", "The Quarry", "Old Woods"};
+        static const char *const an[NPLACE] = {"Shell Island", "The Market", "High Pasture", "The Quarry", "Old Woods", "Amberwood",
+                                               "The Harbour", "Lakeshore", "Sunbake Mesa", "Pinecrest", "Stonegate"};
         s_add(an[AI(scene)]);
         if (scene != MAP_MARKET) { s_add(": "); s_num(woods_finds(), 0); }
     }
